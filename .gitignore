@@ -1,0 +1,35 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Temp and scratch
+.tmp/
+*.tmp
+*.swp
+*~
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+
+# Test artifacts
+*.profraw
+
+# Large reference files (>50MB, GitHub limit)
+reference/*.zip
+reference/*.tar.gz
+reference/*.tar.xz
+reference/abox/

@@ -1,0 +1,1154 @@
+/* 面板外壳的样式。零构建：这一份直接 include_str! 进二进制，改完重编就是新版。
+
+   版式照 abox 那一类面板的形状（左侧可收起导航 + 顶部页题与工具条 + 一次一屏），
+   配色走深色一档：底近黑蓝、卡片比底亮两级、分隔线不靠阴影、强调色只用在一处动作上。
+   只做深色这一套：浅色没有对应的调色板，宁可只给一套调过的，也不给一套没调过的。 */
+:root {
+  color-scheme: dark;
+  --bg: #10151a;
+  --side: #141a20;
+  --panel: #171e25;
+  --raised: #1c242c;
+  --field: #12181e;
+  --line: #26313a;
+  --line-strong: #34424f;
+  --fg: #e6edf3;
+  --muted: #93a1ad;
+  --accent: #2f80ed;
+  --accent-hi: #4c97f5;
+  --bad: #ff7b72;
+  --good: #3ddc97;
+  --warn: #f2b04a;
+  --diff: #3a2f10;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.55 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+.app {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+/* —— 左侧导航 —— */
+#sidebar {
+  flex: none;
+  width: 15.5rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  padding: .9rem .6rem 1.2rem;
+  background: var(--side);
+  border-right: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+.brand {
+  margin: 0 .35rem .5rem;
+  font-size: .95rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.brand span {
+  display: block;
+  color: var(--muted);
+  font-size: .74rem;
+  font-weight: 400;
+  letter-spacing: .01em;
+}
+
+#nav {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+}
+
+.nav-group {
+  margin: .85rem .5rem .2rem;
+  color: var(--muted);
+  font-size: .69rem;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  width: 100%;
+  margin: 0;
+  padding: .38rem .5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: .84rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--raised);
+}
+
+.nav-item .mark {
+  flex: none;
+  width: 1.45rem;
+  height: 1.45rem;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.nav-item.active {
+  background: var(--raised);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--line-strong);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: #fff;
+}
+
+.nav-item.active .mark {
+  background: var(--accent);
+  border-color: var(--accent-hi);
+  color: #06101c;
+  font-weight: 700;
+}
+
+/* 侧栏底部固定两块：退出登录 + 收起导航。退出这条借 abox 的形状，
+   做的事只有一件——清掉浏览器里那一份令牌，磁盘上的东西一个字节都不动。 */
+.side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  padding-top: .6rem;
+}
+
+#nav-toggle {
+  align-self: flex-start;
+}
+
+body.nav-collapsed .side-foot button {
+  width: 100%;
+  padding-inline: .2rem;
+  font-size: .72rem;
+}
+
+/* 收起态：导航收成一条轨，每项只剩那个字。没有图标资源可带（CSP 与零构建），
+   所以轨上的记号就是那一屏名字的第一个字——至少"点了会去哪"还认得出。 */
+body.nav-collapsed #sidebar {
+  width: 4.1rem;
+  padding-inline: .45rem;
+}
+
+body.nav-collapsed .brand span,
+body.nav-collapsed .nav-item .label,
+body.nav-collapsed .nav-group {
+  display: none;
+}
+
+body.nav-collapsed .nav-item {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* —— 右侧内容 —— */
+main {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 66rem;
+  padding: 0 1.6rem 3.5rem;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .8rem;
+  margin: 0 -1.6rem .9rem;
+  padding: .8rem 1.6rem .7rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 650;
+  letter-spacing: .01em;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: .95rem 1.05rem 1.05rem;
+  margin: 0 0 .9rem;
+  background: var(--panel);
+  position: relative;
+}
+
+.card:hover {
+  border-color: var(--line-strong);
+}
+
+/* 危险那一档靠底色，不靠一个红按钮：这一屏要的是"扫一眼就知道这一步会断网"，
+   而按钮已经挤在一排动作里了。（形状借 abox 那类面板：绿调用在有备份/取回意味的动作上，
+   红调用在覆盖或掐断的那一格上。目前只有"下发"和"回滚"够得上。） */
+.card--danger {
+  border-color: color-mix(in srgb, var(--bad) 42%, var(--line));
+  background: color-mix(in srgb, var(--bad) 7%, var(--panel));
+}
+
+.sub--danger {
+  border-color: color-mix(in srgb, var(--bad) 38%, var(--line));
+  background: color-mix(in srgb, var(--bad) 6%, transparent);
+}
+
+/* 卡内的虚线子块：一块是一个动作的下文（按钮 + 回执），
+   虚线而不是实线——它不是另一张卡，读起来要矮一级。 */
+.sub {
+  margin-top: .8rem;
+  padding: .6rem .7rem .7rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+}
+
+.sub h3 {
+  margin-top: 0;
+}
+
+.sub .actions {
+  margin-top: .45rem;
+}
+
+/* 右上角状态徽标：形状借 abox（`未配置` 红 / `可访问` 绿），但里面的字只写
+   这一块真的读到的东西——没读到就是"未读取"，不猜成"未配置"。 */
+.badge {
+  position: absolute;
+  top: .7rem;
+  right: .8rem;
+  padding: .06rem .5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: .7rem;
+  letter-spacing: .02em;
+  overflow-wrap: anywhere;
+}
+
+.badge--ok {
+  border-color: color-mix(in srgb, var(--good) 55%, transparent);
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  color: var(--good);
+}
+
+.badge--bad {
+  border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  color: var(--bad);
+}
+
+.badge--warn {
+  border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  color: var(--warn);
+}
+
+h2 {
+  margin: 0 0 .55rem;
+  font-size: .82rem;
+  font-weight: 650;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-right: 6.5rem;
+}
+
+h3 {
+  margin: .95rem 0 .3rem;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: .89em;
+  color: #cfe3f5;
+}
+
+label {
+  display: block;
+  margin-bottom: .35rem;
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+input {
+  width: 100%;
+  max-width: 22rem;
+  padding: .42rem .55rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 1px;
+}
+
+button {
+  margin: 0;
+  padding: .42rem .85rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--fg);
+  font: inherit;
+  font-size: .84rem;
+  cursor: pointer;
+}
+
+button:hover:not([disabled]) {
+  border-color: var(--accent);
+}
+
+/* 三个"这一步会动到机器"的按钮用强调色填：一屏里只有一个实心块，
+   需要人停一下的那一步就一眼分得出来。 */
+#connect,
+#save,
+#apply {
+  background: var(--accent);
+  border-color: var(--accent-hi);
+  color: #06101c;
+  font-weight: 600;
+}
+
+#apply {
+  background: var(--bad);
+  border-color: #ff9d95;
+}
+
+/* 回执末尾那句「要改回来点这里」的去处，就贴在那一句下面：这一按顺手动过的格子，
+   改回来的入口必须和那句话挨着——隔一屏找人自己发现的入口，等于没给。
+   开局 hidden，只有服务端这一按真动了「默认怎么走」才亮。 */
+#sub-policy-link {
+  margin: .1rem 0 .6rem;
+}
+
+button[disabled] {
+  opacity: .45;
+  cursor: default;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: .25rem .6rem;
+  margin: 0;
+}
+
+dt {
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+ul#findings {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+/* 「诊断」那一屏也收同一份清单：`doctor` 的 invalid_state 一条里装的就是多行"共 N 处"，
+   默认折行会把清单压成一句长话。 */
+ul#findings li {
+  white-space: pre-line;
+}
+
+.note {
+  color: var(--muted);
+  font-size: .83rem;
+  margin: .5rem 0 0;
+}
+
+.warn {
+  color: var(--bad);
+  font-size: .83rem;
+  margin: .5rem 0 0;
+}
+
+/* 保存那一格要能一行一条：校验一次列全之后送来的是多行文本，而 <p> 默认把换行折成空格，
+   列全和列成一条长句在屏幕上就没区别了。 */
+#save-out {
+  white-space: pre-line;
+}
+
+.ok {
+  color: var(--good);
+}
+
+pre {
+  margin: .6rem 0 0;
+  padding: .55rem .65rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: .83rem;
+}
+
+/* —— 编辑那几屏 —— */
+/* 基础 input 的规则是给文本框用的，勾选框要自己一条，否则会被拉成一整行。 */
+input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin: .25rem 0;
+  color: var(--fg);
+  font-size: .84rem;
+}
+
+select {
+  padding: .42rem .5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+}
+
+.field {
+  margin-top: .55rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .45rem;
+  margin-top: .7rem;
+}
+
+/* 一来源一卡：五张卡各自是一个有界窗口，而不是整屏一份 64 KiB 的长条——五份正文叠成一列会把
+   "数据面刚刚说了什么"挤出首屏，而那一格才是这一屏要人先看的。
+   卡里那枚徽标是**行内**的一格：`.badge` 本来的绝对定位留给整张卡右上角那一枚（"有内容 N／5"）。 */
+#logs-cards {
+  display: grid;
+  gap: .7rem;
+  margin-top: .7rem;
+}
+
+.log-src {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: .6rem .7rem .7rem;
+  background: var(--raised);
+}
+
+.log-src-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+
+.log-src-title {
+  font-size: .84rem;
+  font-weight: 600;
+}
+
+.log-src-head .badge {
+  position: static;
+}
+
+.log-src-body {
+  max-height: 12rem;
+  overflow-y: auto;
+  margin: .5rem 0 0;
+}
+
+/* 读之前那一句、读取中断那一句、整次失败那一句——这一屏没有"半份读数"可看，
+   所以是**一句**而不是一列空卡；卡出来了这句就整条收掉（JS 上 `hidden`）。 */
+#logs-out {
+  white-space: pre-wrap;
+}
+
+/* 生成预览那四格同上：一份完整配置比一屏日志还长，给它一个有界窗口在里面滚。 */
+#preview-dae,
+#preview-oxidns,
+#preview-nft,
+#preview-netstate {
+  max-height: 24rem;
+  overflow-y: auto;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* 「分流情况」那一屏的表：一行 = 梯级上的一格，六个字段一行摆不下就换行（窄屏只有 613px），
+   所以跟 `.rec-row` 一样走 flex-wrap。行数等于名单条数加十来行，给一个有界窗口在里面滚，
+   不把这一屏撑到看不见顶上那两句（"还没下发"与"哪一份渲染不出来"才是这一屏要人先看的）。
+   `.diff` 的底色沿用预览那一条：这一屏比的也是"同一个浏览器里上一次读到的那一张"。 */
+#ladder-rows {
+  list-style: none;
+  margin: .3rem 0 0;
+  padding: 0;
+  max-height: 26rem;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+.ladder-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .2rem .6rem;
+  padding: .4rem .5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.ladder-seq {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: none;
+  width: 2.2rem;
+}
+
+.ladder-tier {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: none;
+}
+
+.ladder-when {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ladder-then {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ladder-nums {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: 1 1 11rem;
+}
+
+/* 逐行"已生效"：P4 之前永远是"—"（修订里没存 dae/oxidns 文本，无从比对）。
+   有了真值之后 ok = 已部署里有这一行，warn = 已部署里没有。 */
+.ladder-applied {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: none;
+  width: 2rem;
+  text-align: center;
+}
+
+.ladder-from {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: 1 1 9rem;
+  overflow-wrap: anywhere;
+}
+
+/* 落点那句单独占一行：它是"为什么不落行"或"被谁盖住"，跟条件/结果不在一个层次上 */
+.ladder-why {
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+}
+
+/* 表尾"没有落点"那几行：期望态里有、两台引擎都落不成行。dim 不是 ok——
+   它要说的是"这一格现在不生效"，画成正常行就等于把它说成已生效。 */
+.ladder-row--gone {
+  background: var(--field);
+}
+
+.ladder-row--gone .ladder-tier {
+  color: var(--warn);
+}
+
+/* 「DNS 记录」那一屏的有界窗口。列表一次最多 200 行，全画出来会把这一屏撑到看不见上面
+   那句"跑的是哪一份"——而那句话正是这一屏存在的理由，所以在这里滚，不在页面里滚。 */
+#dnsrec-list {
+  list-style: none;
+  margin: .3rem 0 0;
+  padding: 0;
+  max-height: 22rem;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+#dnsrec-detail {
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+#dnsrec-steps {
+  list-style: none;
+  margin: .3rem 0 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+/* 一行 = 一次查询，而且它是**可点的**：这一屏是两层，第二层要的就是"点这一条"。
+   没有链接、没有内联事件（CSP 只放行 'self'），点击委托在列表上。 */
+.rec-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .2rem .6rem;
+  padding: .4rem .5rem;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.rec-row:hover {
+  background: var(--raised);
+}
+
+.rec-row.selected {
+  background: var(--raised);
+  border-left: 2px solid var(--accent);
+  padding-left: calc(.5rem - 2px);
+}
+
+.rec-qname {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rec-from,
+.rec-when,
+.rec-ms {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: 1 1 5rem;
+}
+
+/* 一步一行：kind/tag/outcome 三段。失败的那几步由 JS 换成 .warn 的措辞色——
+   一次失败的解析常常是链上一路往回传的好几处，只报最后那个应答码看不出来是谁拖失败的。 */
+.step-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .2rem .6rem;
+  padding: .25rem .5rem;
+  border-bottom: 1px solid var(--line);
+  font-size: .85rem;
+}
+
+.step-tag {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.step-node {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: none;
+}
+
+/* 看板：一行 = 一个「名字」+「N 次 · 占比」+ 一根按占比长短的条。
+   那根条是**可选的**——JS 在占比读不出时压根不建它（一根 0 长的条说的是"占比 0"，
+   和"这一格没读到"是两句话），所以这一层不许用 CSS 给条补默认宽度。
+   行数由上游给，没有 ZBox 这一侧的上限（2026-10-12 实测：问域名那一格 13 行）。
+   四格叠在一屏里足以把上面那两张卡推出视线，而"每格自己的样本数"就在卡头，
+   所以和 #dnsrec-list 一样：每格自己有界窗口，不在整页里滚。 */
+ul.board-rows {
+  list-style: none;
+  margin: .3rem 0 0;
+  padding: 0;
+  max-height: 13rem;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+.board-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .15rem .6rem;
+  padding: .35rem .5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 域名和 IP 都可能比这一列长，所以折行按字符断，不给它把右边那列顶跑。 */
+.board-key {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.board-num {
+  flex: none;
+  min-width: 8.5rem;
+  text-align: right;
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+/* 条自己占一行（basis 100%），因为给它和名字抢同一行会让"长短"这件事看不准。
+   底色那条表示"满"，只为了对齐，不表达任何读数。宽度由 JS 写成行内 style——
+   占比每行都不同，没有可复用的类。 */
+.board-bar {
+  flex: 1 1 100%;
+  height: .3rem;
+  background: var(--field);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.board-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* "这一份生成物与上一屏读到的那份不同的那一段"。用行号标，不用内容匹配，
+   所以一行里出现任何字符都不会画错。左边那道实线是给"扫一眼就知道标到哪"用的。 */
+.diff {
+  background: var(--diff);
+  border-left: 2px solid var(--warn);
+  margin-left: -.65rem;
+  padding-left: .55rem;
+}
+
+button.mini {
+  padding: .25rem .6rem;
+  font-size: .8rem;
+}
+
+ul.rules {
+  list-style: none;
+  margin: .3rem 0 0;
+  padding: 0;
+}
+
+.rule-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  margin: .3rem 0;
+}
+
+.rule-row input,
+.rule-row select {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.rule-row .seq {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: none;
+  width: 1.6rem;
+}
+
+/* DNS 上游一行七个控件：没有小标题就分不清哪个框是哪个，所以每格自带一条 caption。
+   `input` 的基础规则是 max-width: 22rem，一行七格会被它撑爆。 */
+ul.upstreams {
+  list-style: none;
+  margin: .3rem 0 0;
+  padding: 0;
+}
+
+.up-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: .4rem;
+  margin: .45rem 0;
+  padding: .5rem .55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+}
+
+.up-row:hover {
+  border-color: var(--line-strong);
+}
+
+.up-row .seq {
+  color: var(--muted);
+  font-size: .8rem;
+  flex: none;
+  width: 1.4rem;
+}
+
+.up-cell {
+  display: block;
+  margin: 0;
+  flex: 1 1 6.5rem;
+  min-width: 0;
+}
+
+.up-cell span {
+  display: block;
+  color: var(--muted);
+  font-size: .71rem;
+  margin-bottom: .15rem;
+}
+
+.up-cell input,
+.up-cell select {
+  width: 100%;
+  max-width: none;
+  padding: .35rem .4rem;
+  font-size: .83rem;
+}
+
+/* 派生那一格（在线源的产物落点）不是输入框，形状却要跟上同一行——
+   它读起来该像"这是算出来的"，不是一个没填完的框。 */
+.up-cell output {
+  display: block;
+  width: 100%;
+  padding: .35rem .4rem;
+  font-size: .83rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.up-nav {
+  display: flex;
+  gap: .3rem;
+  flex: none;
+}
+
+/* 设备那四栏：一栏就是一档，卡片住在哪一栏就是哪一档。
+   栏的先后**不是**优先级（`devices[]` 的数组序在我们这里没有语义），
+   所以这一屏没有序号、也没有上移下移——那两样东西留给「默认怎么走」里真有先后的域名名单。 */
+.lanes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .5rem;
+  align-items: start;
+  margin-top: .8rem;
+}
+
+.lane {
+  min-width: 0;
+  padding: .5rem .55rem .6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.lane h3 {
+  margin: 0;
+  font-size: .95rem;
+}
+
+.lane .lane-count {
+  margin: .1rem 0 .35rem;
+  color: var(--muted);
+  font-size: .74rem;
+}
+
+.lane .note {
+  font-size: .74rem;
+}
+
+/* 拖到这一栏上时给一个"松手就落这儿"的形状；没有它，拖动中途看不出目标。 */
+.lane.drop {
+  border-color: var(--accent);
+  background: var(--field);
+}
+
+.lane-cards {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  margin: .45rem 0 0;
+  padding: 0;
+  min-height: 2.2rem;
+}
+
+.dev-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: .35rem;
+  padding: .45rem .5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--raised);
+}
+
+/* 拖动只从这一小块起手：卡片里全是输入框，整张卡 draggable 会让点框子变成拖卡片。 */
+.dev-grip {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 .35rem;
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .7rem;
+  cursor: grab;
+  user-select: none;
+}
+
+.dev-card .up-cell {
+  flex: 1 1 4.5rem;
+}
+
+.dev-warn {
+  flex: 1 1 100%;
+  margin: .1rem 0 0;
+  color: var(--warn);
+  font-size: .72rem;
+}
+
+@media (max-width: 70rem) {
+  .lanes {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 40rem) {
+  .lanes {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 三档开关：一颗按钮改的是背后那两格，所以它的形状要像"挑一档"，不像"按一个钮"。
+   选中那一档不只换底色——副标也要跟着从灰变正常色，否则窄屏上只看得出边框动了。 */
+.mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin: .5rem 0 .35rem;
+}
+
+.mode-opt {
+  flex: 1 1 9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .12rem;
+  padding: .5rem .6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--raised);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mode-opt span {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.mode-opt:hover {
+  border-color: var(--accent-hi);
+}
+
+.mode-opt.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.mode-opt.on span {
+  color: inherit;
+}
+
+#mode-switch-note.muted-note {
+  color: var(--muted);
+}
+
+@media (max-width: 40rem) {
+  .mode-opt {
+    flex: 1 1 100%;
+  }
+}
+
+.port-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.port-row .field {
+  flex: 0 1 8rem;
+}
+
+.port-row input {
+  max-width: 8rem;
+}
+
+/* 窄屏（手机、或者并排两个窗口）：导航从一轨横过来变成顶上的一条横向轨道，
+   内容区不再有左边界。收起态在这种宽度下没有意义，所以直接忽略那个 class。
+   界是"导航只占顶上两行"：这一屏原先靠换行摊成 439px，把「订阅与节点」的主按钮顶到
+   折线外（实测 y=911，视口 900）——手机上新用户打开面板只见导航，不见要做的事。 */
+@media (max-width: 56rem) {
+  .app {
+    display: block;
+  }
+
+  #sidebar {
+    width: auto;
+    max-height: none;
+    min-height: 0;
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .3rem .5rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: .45rem .7rem;
+  }
+
+  body.nav-collapsed #sidebar {
+    width: auto;
+  }
+
+  body.nav-collapsed .brand span,
+  body.nav-collapsed .nav-item .label,
+  body.nav-collapsed .nav-group {
+    display: revert;
+  }
+
+  body.nav-collapsed .nav-item {
+    justify-content: flex-start;
+    padding-inline: .5rem;
+  }
+
+  .brand {
+    flex: none;
+    order: 0;
+    margin: 0;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  /* 八个屏名排成一条只能横向滑动的轨，不是一堆换行的按钮：
+     轨占满一整行，品牌与退出那一行留在它上面。 */
+  #nav {
+    flex: 1 1 100%;
+    order: 2;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: .3rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  /* 高级那一层是 nav 里的一个 div；不摊平它就会整块挤成轨上的一个格，
+     里面的屏名点不到。hidden 的时候保持不显示——这条必须带 :not，
+     因为 `display: contents` 会盖掉 [hidden] 的 UA 规则。 */
+  #nav-advanced:not([hidden]) {
+    display: contents;
+  }
+
+  .nav-group {
+    flex: none;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .nav-item {
+    flex: none;
+    width: auto;
+    padding: .3rem .5rem;
+    white-space: nowrap;
+  }
+
+  .side-foot {
+    flex: 0 1 auto;
+    order: 1;
+    flex-direction: row;
+    gap: .35rem;
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  body.nav-collapsed .side-foot button {
+    width: auto;
+    padding-inline: .85rem;
+    font-size: .84rem;
+  }
+
+  #nav-toggle {
+    display: none;
+  }
+
+  main {
+    padding: 0 1rem 2.5rem;
+  }
+
+  .topbar {
+    margin-inline: -1rem;
+    padding-inline: 1rem;
+  }
+
+  dl {
+    grid-template-columns: 1fr;
+  }
+}

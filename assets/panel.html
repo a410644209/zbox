@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZBox 旁路由面板</title>
+<link rel="stylesheet" href="/panel.css">
+</head>
+<body>
+<!-- 外壳的形状：左侧可收起的导航 + 顶部页题与工具条 + 一次只出一屏的内容区。
+     分屏不是为好看：这一份状态有十几组互相牵连的字段，全铺在一屏里时"我改的是哪一格"本身就难定位。
+     导航项与内容块靠同一个 data-view 值配对，加一屏要同时改 HTML、JS 里的那张表和 CSS——
+     少一边由 assets 的测试在编译期拦住。保存/放弃改动放在顶部工具条而不是每一屏底部，
+     是因为改哪一屏存的都是同一份 state.json：每屏一个保存按钮会给出"这一屏独立提交"的假象。
+     分组名按"这一组在决定什么"来起，不按数据结构起（版式参照 abox 那类面板：按域分组、每组 2–4 项、
+     底部固定退出）。参照的是形状，不是它的功能面：那一类面板里的 AI 助手 / 智能家居 / 个人导航一类
+     与旁路由无关，一格都没有搬过来。 -->
+<div class="app">
+
+<aside id="sidebar">
+<p class="brand">ZBox <span>旁路由面板</span></p>
+<nav id="nav" aria-label="面板分区">
+
+<p class="nav-group">照着做</p>
+<button class="nav-item" type="button" data-view="connect" data-tier="basic"><span class="mark">连</span><span class="label">连接与令牌</span></button>
+<button class="nav-item" type="button" data-view="nodes" data-tier="basic"><span class="mark">订</span><span class="label">订阅与节点</span></button>
+<button class="nav-item" type="button" data-view="policy" data-tier="basic"><span class="mark">默</span><span class="label">默认怎么走</span></button>
+<button class="nav-item" type="button" data-view="devices" data-tier="basic"><span class="mark">某</span><span class="label">某台设备单独走</span></button>
+<button class="nav-item" type="button" data-view="deploy" data-tier="basic"><span class="mark">让</span><span class="label">让它生效</span></button>
+
+<p class="nav-group">现在怎么样</p>
+<button class="nav-item" type="button" data-view="overview" data-tier="basic"><span class="mark">现</span><span class="label">现在的状态</span></button>
+<button class="nav-item" type="button" data-view="board" data-tier="basic"><span class="mark">看</span><span class="label">看板</span></button>
+<button class="nav-item" type="button" data-view="dns-records" data-tier="basic"><span class="mark">解</span><span class="label">解析记录</span></button>
+
+<div id="nav-advanced" hidden>
+<p class="nav-group">高级：改规则本身</p>
+<button class="nav-item" type="button" data-view="doctor" data-tier="advanced"><span class="mark">诊</span><span class="label">诊断</span></button>
+<button class="nav-item" type="button" data-view="rulesets" data-tier="advanced"><span class="mark">规</span><span class="label">规则集</span></button>
+<button class="nav-item" type="button" data-view="ladder" data-tier="advanced"><span class="mark">分</span><span class="label">分流情况</span></button>
+<button class="nav-item" type="button" data-view="network" data-tier="advanced"><span class="mark">网</span><span class="label">网络 · 路线 · 端口</span></button>
+<button class="nav-item" type="button" data-view="dns" data-tier="advanced"><span class="mark">D</span><span class="label">DNS 上游与 fakeip</span></button>
+<button class="nav-item" type="button" data-view="groups" data-tier="advanced"><span class="mark">组</span><span class="label">策略组</span></button>
+<button class="nav-item" type="button" data-view="preview" data-tier="advanced"><span class="mark">预</span><span class="label">生成预览</span></button>
+<button class="nav-item" type="button" data-view="logs" data-tier="advanced"><span class="mark">日</span><span class="label">日志</span></button>
+</div>
+
+</nav>
+<div class="side-foot">
+<button id="logout" type="button">退出登录</button>
+<button id="mode-toggle" type="button">开启高级模式</button>
+<button id="nav-toggle" type="button">收起导航</button>
+</div>
+</aside>
+
+<main>
+<header class="topbar">
+<div class="page-head">
+<h1 id="page-title">ZBox 旁路由面板</h1>
+<p id="page-sub" class="note">先在「连接与令牌」那一屏把令牌贴进来。</p>
+</div>
+<div class="toolbar">
+<button id="save" type="button" disabled>保存到磁盘</button>
+<button id="revert" class="mini" type="button">放弃改动，重读磁盘</button>
+</div>
+</header>
+<p id="editor-warning" class="warn" hidden></p>
+<p id="save-out" class="note"></p>
+
+<p id="editor-locked" class="note" hidden>这几屏要读到磁盘上那份期望状态才有内容可改——
+先在「连接与令牌」那一屏连上一次。</p>
+
+<section class="page" data-view="connect">
+<div class="card">
+<h2>连接</h2>
+<label for="token">访问令牌（在机器上跑 <code>zboxd panel-token</code> 取）</label>
+<input id="token" type="password" autocomplete="off" spellcheck="false">
+<button id="connect" type="button">连接并读取</button>
+<p class="note">令牌也能放在地址的 <code>#</code> 后面送上来：浏览器不会把 <code>#</code> 之后的部分
+发给服务器，也不会把它写进访问日志。</p>
+<p id="connect-state" class="note"></p>
+</div>
+
+<div class="card">
+<h2>这条路怎么走</h2>
+<p class="note">侧栏顶上那组「照着做」五屏是全部必经的几步，按顺序走一遍就通；中间那组
+「现在怎么样」三屏只看不改，随时可以回来看。剩下那些要动规则本身的屏才住在侧栏底部那个
+「开启高级模式」后面——不去改规则本身，就不用碰它们。</p>
+<dl>
+<dt>① 连接与令牌</dt><dd>就是这一屏：把机器上取到的令牌贴进来，连上这台 ZBox。</dd>
+<dt>② 订阅与节点</dt><dd>告诉 ZBox 有哪些出口可走：有机场订阅链接就贴进来按「导入订阅」，自己搭的出口用下面那三个「加一条」按钮。</dd>
+<dt>③ 默认怎么走</dt><dd>这一屏顶上是一排三颗钮：<strong>「不科学」</strong>（全部直连）、
+<strong>「智能分流」</strong>（大陆直连，其余走代理）、<strong>「全局」</strong>（所有域名都走代理）。
+要科学上网就按<strong>「智能分流」</strong>那一颗——上一屏贴订阅按「导入订阅」时 ZBox 会顺手把它设好，
+没订阅或想改主意就在这儿按。新机器出厂是第一颗「不科学」，那一档装上也不断网。</dd>
+<dt>④ 某台设备单独走</dt><dd>只让局域网里某一台不跟着默认走；不需要就跳过这一屏。</dd>
+<dt>⑤ 让它生效</dt><dd>把前四屏写下来的那一份<strong>交给数据面</strong>：按这一屏的
+「显式下发当前期望状态」；要退回时也从这一屏的清单里挑一份回来。
+会掐断连接的那几步（下发、回滚、开关劫持）都在这一屏，没有一个藏在别的按钮后面。</dd>
+</dl>
+<p class="note"><strong>「保存到磁盘」不在哪一屏里面</strong>：它一直挂在页面<strong>顶上那一排</strong>，
+上面任何一格改完都要按它一次才写下来（旁边那颗「放弃改动，重读磁盘」是反悔用的）。
+<strong>保存也不等于下发</strong>：保存只写 <code>state.json</code>，数据面要等第⑤屏，
+而下发会把在用连接掐断一次。</p>
+<p class="note">还剩机器那一侧的一步：要用的人把 <strong>DNS 或网关改成这台 ZBox 的地址</strong>，
+流量才会经过这里。</p>
+</div>
+</section>
+
+<section class="page" data-view="overview">
+<div class="card">
+<h2>现在的状态</h2>
+<span id="overview-badge" class="badge">未读取</span>
+<dl id="overview">
+<dt>状态来源</dt><dd id="source">未读取</dd>
+<dt>客户端指到哪儿</dt><dd id="client-target">未读取</dd>
+<dt>本机网卡</dt><dd id="network-shape">未读取</dd>
+<dt>磁盘指纹</dt><dd id="etag">未读取</dd>
+<dt>已知良好修订</dt><dd id="last-good">未读取</dd>
+<dt>修订历史</dt><dd id="revisions">未读取</dd>
+<dt>待下发</dt><dd id="reload-pending">未读取</dd>
+<dt>生成报错</dt><dd id="generation-error">未读取</dd>
+<dt>编排生成物（dae / oxidns）</dt><dd id="render-errors">未读取</dd>
+<dt>在听端口</dt><dd id="listening">未读取</dd>
+<dt>服务活跃</dt><dd id="service-active">未读取</dd>
+<dt>劫持层 / 策略路由</dt><dd id="hijack">未读取</dd>
+<dt>IPv6 那半边</dt><dd id="hijack6">未读取</dd>
+</dl>
+</div>
+</section>
+
+<!-- 看板：一屏之内的数来自**同一次**刷新，所以顶上有一句"这份读数是几点取的"。
+     取数口每条都写得出、也都能拿别的工具核对：硬件那几格读的是 /proc 里那几个普通文件
+     （`free`、`top`、`cat /proc/net/dev` 都能看到同一批数），解析层那四格读的是 oxidns
+     自己绑在回环上的管理口。这一屏**一条命令都不发**——那是它能被反复刷新的前提。
+     磁盘那一格明写"没读"而不是留空：藏起来的那格会让人以为产品没这能力，而不是这一屏不读它。
+     「哪一条连接走了代理」这句是**故意留在屏幕上**的：#69/G4 定案前连接层给不出，
+     而从日志行反推一句"这条走了代理"是本项目明令不许的做法（BLUEPRINT §11.3 B 第 3 件）。 -->
+<section class="page" data-view="board">
+<div class="card">
+<h2>这台机器现在</h2>
+<span id="board-badge" class="badge">未读取</span>
+<div class="actions">
+<button id="board-read" type="button" disabled>读一次</button>
+<span id="board-meta" class="note">未读取</span>
+</div>
+<p class="note" id="board-taken">未读取。按一下上面「读一次」。</p>
+<dl id="board-hw">
+<dt>内存</dt><dd id="board-mem">未读取</dd>
+<dt>负载（1 / 5 / 15 分钟）</dt><dd id="board-load">未读取</dd>
+<dt>已经运行</dt><dd id="board-uptime">未读取</dd>
+<dt>局域网网卡（盘上那份写的）</dt><dd id="board-lan-iface">未读取</dd>
+</dl>
+<ul id="board-ifaces" class="board-rows"></ul>
+<p class="note" id="board-ifaces-note">网卡还没读出来。</p>
+<p class="note" id="board-disk">未读取。</p>
+<p class="note">这一屏给不出「哪一条连接走了代理」。连接层那一半还没定案，
+而从数据面日志的某一行里反推一句「这条走了代理」是本项目明令不许的做法——宁可把这一格空着写在屏幕上。</p>
+</div>
+
+<div class="card">
+<h2>谁在问、问了什么</h2>
+<p class="note" id="board-dns-meta">未读取。</p>
+<h3>问得最多的域名</h3>
+<p class="note" id="board-qnames-sample">未读取。</p>
+<ul id="board-qnames" class="board-rows"></ul>
+<h3>问得最多的客户端</h3>
+<p class="note" id="board-clients-sample">未读取。</p>
+<ul id="board-clients" class="board-rows"></ul>
+<h3>这些查询怎么收场的</h3>
+<p class="note" id="board-rcodes-sample">未读取。</p>
+<ul id="board-rcodes" class="board-rows"></ul>
+<h3>走到链上哪一步</h3>
+<p class="note" id="board-plugins-sample">未读取。</p>
+<ul id="board-plugins" class="board-rows"></ul>
+<p class="note" id="board-dns-note">未读取。按一下上面「读一次」。</p>
+</div>
+
+<!-- §11.3 G：三台引擎在不在、什么版本、跑的是不是盘上这一份。这一卡同样**一条命令都不发**：
+     oxidns 那一行读的是它自己那个只绑回环的管理口（进程活着才答，所以"读到了"就是在位），
+     dae 与主路由两行的那句"为什么读不到"由服务端给（`crate::svc::board`），面板抄。
+     「跑的是不是这一份」只报数，不判放行——那道门在「让它生效」与「诊断」那两屏。 -->
+<div class="card">
+<h2>三台引擎在不在</h2>
+<dl id="board-engines">
+<dt>域名解析（oxidns）</dt><dd id="board-engine-oxidns">未读取</dd>
+<dt>分流（dae）</dt><dd id="board-engine-dae">未读取</dd>
+<dt>主路由</dt><dd id="board-engine-router">未读取</dd>
+</dl>
+<p class="note" id="board-engine-note">未读取。按一下上面「读一次」。</p>
+</div>
+</section>
+
+<section class="page" data-view="doctor">
+<div class="card">
+<h2>诊断</h2>
+<span id="doctor-badge" class="badge">未读取</span>
+<ul id="findings"><li class="note">未读取</li></ul>
+</div>
+</section>
+
+<div id="editor" hidden>
+
+<section class="page" data-view="policy">
+<div class="card">
+<h2>分流策略</h2>
+<p class="note"><strong>先点下面这一排就够了</strong>：它改的是背后那两格（中国大陆那条直连、
+和没命中任何规则时走哪），改完那两格还是能在下面单独拧。</p>
+<div id="mode-switch" class="mode-switch" role="group" aria-label="默认怎么走">
+<button type="button" class="mode-opt" data-mode="direct">不科学<span>全部直连</span></button>
+<button type="button" class="mode-opt" data-mode="smart">智能分流<span>大陆直连，其余走代理</span></button>
+<button type="button" class="mode-opt" data-mode="global">全局<span>所有域名都走代理</span></button>
+</div>
+<p class="note" id="mode-switch-note"></p>
+<p class="note">这一排只管那两格。<strong>私网直连、广告拦截、BT 直连那三格各管各的</strong>，
+不跟着它动。</p>
+<label class="check"><input id="pol-private-direct" type="checkbox"><span>私网 / 回环 / 组播地址直连</span></label>
+<label class="check"><input id="pol-cn-direct" type="checkbox"><span>中国大陆域名与 IP 直连</span></label>
+<label class="check"><input id="pol-block-ads" type="checkbox"><span>命中广告规则集就拦截</span></label>
+<label class="check"><input id="pol-bittorrent" type="checkbox"><span>BT 下载直连</span></label>
+<div class="field">
+<label for="pol-final">兜底出口：没命中任何规则的流量去哪里</label>
+<select id="pol-final">
+<option value="direct">direct — 全部直连（新装就是这个，装了不断网）</option>
+<option value="proxy">proxy — 交给一个策略组</option>
+</select>
+</div>
+<div class="field" id="final-group-field" hidden>
+<label for="pol-final-group">策略组 tag</label>
+<input id="pol-final-group" type="text" autocomplete="off" spellcheck="false">
+<p class="note">得是这份状态里已经存在的策略组 tag：保存这一关就会验，不存在的组直接 400 退回。</p>
+</div>
+</div>
+
+<div class="card">
+<h2>域名名单</h2>
+<p class="note"><strong>顺序即优先级</strong>：第一条命中的生效，排在后面的规则不再被看到。
+写法沿用名单那套：<code>example.com</code> 精确、<code>+example.com</code> 或 <code>.example.com</code> 后缀、
+<code>~example</code> 关键词、<code>/正则/</code> 正则。要让某条赢过别的规则，把它<em>往上</em>移。</p>
+<ul id="rule-list" class="rules"></ul>
+<p class="note" id="rule-empty">名单目前是空的。</p>
+<div class="rule-row">
+<input id="new-rule-pattern" type="text" placeholder="+example.com" autocomplete="off" spellcheck="false">
+<select id="new-rule-action">
+<option value="direct">直连</option>
+<option value="proxy">代理</option>
+<option value="block">拦截</option>
+</select>
+<button id="add-rule" class="mini" type="button">加到末尾</button>
+</div>
+</div>
+</section>
+
+<section class="page" data-view="dns">
+<div class="card">
+<h2>DNS 上游</h2>
+<p class="note">两组各一张表，<strong>排第一的是主上游</strong>，其余做冗余。地址写成域名时，
+这一份状态里得另有一个 IP 字面量的上游、或者勾上下面那条"用系统解析器兜底"，
+否则内核起不来——这一关就会 400 退回。<code>经由</code> 填出站或策略组的 tag，留空是直连
+（境外那组走代理解析时用的就是它）。<strong>这一格填错了保存这一关不拦</strong>：模型对 <code>via</code>
+没有引用检查，要等诊断那一栏报"指定了不存在的出站"，而下发时 <code>sing-box check</code> 会直接失败。</p>
+<p class="note"><strong>国内</strong></p>
+<ul id="domestic-list" class="upstreams"></ul>
+<p class="note" id="domestic-empty">这一组目前是空的。</p>
+<div class="actions">
+<button id="add-domestic" class="mini" type="button">加一个国内上游</button>
+</div>
+<p class="note"><strong>境外</strong></p>
+<ul id="overseas-list" class="upstreams"></ul>
+<p class="note" id="overseas-empty">这一组目前是空的。</p>
+<div class="actions">
+<button id="add-overseas" class="mini" type="button">加一个境外上游</button>
+</div>
+</div>
+
+<div class="card">
+<h2>本机解析与地址族</h2>
+<label class="check"><input id="dns-use-system-local" type="checkbox"><span>用系统解析器兜底（局域网主机名一类）</span></label>
+<div class="field">
+<label for="dns-strategy">地址族策略</label>
+<select id="dns-strategy"></select>
+</div>
+</div>
+
+<div class="card">
+<h2>查询记录</h2>
+<label class="check"><input id="dns-records-enabled" type="checkbox"><span>记下每一次查询：「解析记录」那一屏的数据源</span></label>
+<div class="field">
+<label for="dns-records-retention">保留天数</label>
+<input id="dns-records-retention" type="number" min="1" step="1">
+</div>
+<p class="note">记录器挂在解析链的<strong>最外层</strong>，所以连被压掉的那一类应答（<code>nodata</code> / <code>NXDOMAIN</code>）也留痕，
+每条记的是应答加"命中了链上哪几步"。落盘的位置是本机的状态目录，面板读它走 oxidns 的管理 API（只绑回环），
+不直读那份数据库。<br>
+勾掉并<em>下发之后</em>，「解析记录」那一屏就<em>一直是空的</em>——那是这一格造成的，不是采集坏了。
+没下发之前解析器跑的还是上一份配置，那一屏照样读得到旧记录，所以这一句要说的是下发之后。
+保留天数最少 1 天：填 0 生成会当场报错（在 oxidns 那边 0 不是"永久"也不是"不留"，它会让解析器起不来）。</p>
+</div>
+
+<div class="card">
+<h2>fakeip</h2>
+<label class="check"><input id="dns-fakeip-enabled" type="checkbox"><span>启用 fakeip：域名先落一个假地址，按 IP 的那几条规则才分得出境外流量</span></label>
+<div class="field">
+<label for="dns-fakeip-v4">fakeip IPv4 段（CIDR 写法）</label>
+<input id="dns-fakeip-v4" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="dns-fakeip-v6">fakeip IPv6 段（CIDR 写法）</label>
+<input id="dns-fakeip-v6" type="text" autocomplete="off" spellcheck="false">
+</div>
+<p class="note">两段只在勾了 fakeip 时才被检查；勾着而写法不是 CIDR，保存这一关 400 退回。</p>
+</div>
+</section>
+
+<section class="page" data-view="network">
+<div class="card">
+<h2>流量路线与下发节奏</h2>
+<div class="field">
+<label for="net-route-mode">流量路线：旁路由怎么拿到局域网设备的包</label>
+<select id="net-route-mode"></select>
+</div>
+<p class="note"><strong>注入主路由</strong>（默认）：设备的网关仍是主路由，DNS 面把"该走代理的那部分目的地址"
+作为带 TTL 的动态条目写回主路由，主路由只把这一部分转给旁路由——旁路由挂了只是退回没有智能分流，
+<em>不是没有网</em>；代价是主路由上有一张会呼吸的表（重启即失、到期即删）。
+<strong>接管网关</strong>：设备的网关整个交给旁路由，所有流量先到数据面——判定更准（能拿到设备真身），
+代价是旁路由一挂全网断。这一格选的是<em>全局默认</em>；单台设备选"全局科学"那一档时，
+它的网关会单独交给旁路由，不受这里影响。</p>
+<div class="field">
+<label for="net-ipv6-mode">IPv6：这台机器接管到哪一层</label>
+<select id="net-ipv6-mode"></select>
+</div>
+<p class="note"><strong>不接管</strong>（默认）：v6 流量按主路由发的 RA 自己直连出去，代理完全不碰 v6。
+这一档要靠上面的<strong>地址族策略</strong>堵泄漏——选了 <code>prefer_ipv4</code> 而局域网里又有 v6 地址的设备，
+拿到 AAAA 就绕开代理走了。<strong>只接管 DNS</strong>：v6 的 DNS 查询也收进这台机器，但连接层仍不接管 v6，
+所以这一档<em>必须</em>配 <code>ipv4_only</code> / <code>ipv6_only</code>，两者不配保存会被拒。
+<strong>双栈接管</strong>：v6 也进透明代理，代价是要开内核转发——而开转发会让本机停止采纳主路由的 RA。
+这不是猜的：VM 实测写下 <code>net.ipv6.conf.all.forwarding=1</code> 的同一秒，本机那条
+<code>proto ra</code> 的 v6 默认路由就被内核删掉了，ping6 随即失败。所以生成物必须成对写
+<code>accept_ra=2</code>，并且这一档在面板上会先要求你把"这台机器自己的 v6 出口会不会丢"想清楚。</p>
+<p class="note">三档各自落在哪：不接管——v6 侧一个字都不写；只接管 DNS——oxidns 按
+<strong>本机局域网 IPv6</strong> 那一格多开一对监听（显式地址，<em>不是</em> <code>[::]</code>，理由见下面那段），
+nft 里只收 v6 的 53，没有 divert 链；双栈接管——再加 ip6 的 divert 链、
+ip6 的策略路由与那两条 sysctl。<strong>dae 的 tproxy 口不进这份生成物的改动</strong>：实测它自己就绑了
+<code>0.0.0.0</code> 与 <code>[::]</code> 两只口，但都在它自建的网络命名空间里，宿主上查不到——
+所以「生成预览」里 dae 那一格换档时<em>逐字相同是对的</em>，诊断也只报"DNS 口没在 IPv6 上监听"这一条，
+不报 tproxy 那一条。<strong>还有一句要紧的话</strong>：连接层到底由谁来引流还没定案，
+而实测过分流链在没命中时并不拦流量，包会按普通路由直接出去——
+所以"劫持层已加载"<em>不等于</em>"IPv6 流量被管住了"。</p>
+<div class="field">
+<label for="apply-policy">改完之后怎么送到数据面</label>
+<select id="apply-policy"></select>
+</div>
+<p class="note"><strong>热重载</strong>尽量不掐在用连接；<strong>重启</strong>一定掐一次，但不依赖重载的语义。
+这台机器上重载是否真保留连接还没实测过（蓝图文档的 G2），所以这一格默认给热重载、
+但下发完的回执里会写清楚它走的哪条。改这里不会立刻动任何东西——它描述的是"下一次下发怎么做"。</p>
+</div>
+
+<div class="card">
+<h2>网卡与网段</h2>
+<div class="field">
+<label for="net-lan">局域网网卡</label>
+<input id="net-lan" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="net-cidr">局域网 CIDR</label>
+<input id="net-cidr" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="net-addr">本机局域网 IPv4（DNS 解析口绑它）</label>
+<input id="net-addr" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="net-addr6">本机局域网 IPv6（只有接管 IPv6 的 DNS 才用得到）</label>
+<input id="net-addr6" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="net-wan">上游（默认路由）网卡</label>
+<input id="net-wan" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="net-cidr6">局域网 IPv6 前缀（CIDR 写法，可留空）</label>
+<input id="net-cidr6" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="actions">
+<button id="restore-autodetect" class="mini" type="button">恢复自动探测</button>
+</div>
+<p class="note">这几格只要有一格跟内置默认形状不一样，网卡探测就不再覆盖它们。
+<strong>恢复自动探测</strong>把它们填回默认形状（<code>ens33</code> / <code>192.168.1.0/24</code> /
+<code>ens33</code>，两个地址栏清空），填完还要保存一次才落盘，之后由现场探测接管。</p>
+<p class="note">DNS 解析口<em>只</em>绑本机局域网 IPv4 这一格，不绑 <code>0.0.0.0</code>：
+oxidns 那一侧没有"允许哪些客户端"这种开关，监听地址就是唯一的闸，绑通配地址等于在上游那一侧
+开一台开放解析器。这一格由<strong>一键准备</strong>从现场探出来填上；它跟实际网卡上的地址不一致时，
+解析口会直接起不来（<strong>诊断</strong>报 <code>inbound_not_listening</code>），不是静默降级。</p>
+<p class="note">IPv6 那一栏要人显式给一个<strong>固定</strong>地址：SLAAC 那种会自己到期的地址不能用，
+地址没了而配置没跟上，解析口就绑在本机已经没有的地址上。它<strong>不参与自动探测</strong>，
+也不受上面那个按钮的影响。</p>
+<p class="note">局域网 IPv6 前缀那一栏同样<strong>不参与自动探测</strong>：
+它是劫持层限定 <code>ip6 saddr</code> 用的（例如 <code>fd00:db8:1::/64</code>），
+留空表示"还没法按段限定"。只有 IPv6 选了"只接管 DNS"或"双栈接管"时它才会被用到。</p>
+</div>
+
+<div class="card">
+<h2>端口</h2>
+<p class="note">这五个是数据面入站的监听端口。劫持规则里的端口<em>下发</em>时才会重写，
+所以改完要保存一次、再下发一次才生效。<strong>模型不比对端口</strong>：两个入站撞在同一个数字上
+这里拦不住，它会以下发时的内核报错收场。SOCKS 那一栏留空就是不不起这个入站。</p>
+<div class="port-row">
+<div class="field">
+<label for="port-dns">DNS</label>
+<input id="port-dns" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="port-tproxy">TPROXY</label>
+<input id="port-tproxy" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="port-redirect">REDIRECT</label>
+<input id="port-redirect" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="port-mixed">混合（HTTP/SOCKS）</label>
+<input id="port-mixed" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="port-socks">纯 SOCKS（可空）</label>
+<input id="port-socks" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
+</div>
+</div>
+</div>
+</section>
+
+<section class="page" data-view="devices">
+<div class="card">
+<h2>某台设备单独走</h2>
+<p class="note">这里回答的是"这一台不一样"。<strong>一栏就是一档</strong>：把那张卡拖进哪一栏，
+这台设备就走哪一档；不想拖的话，卡片上那一档也能直接改选。</p>
+<p class="note"><strong>拖的是"哪一档"，不是"哪一条"</strong>：这几台之间没有先后，谁也不盖谁，
+所以这一屏没有"第 1 台、第 2 台"那种序号。名单里真有先后的是「默认怎么走」那一屏的域名名单。</p>
+<p class="note">这些例外排在域名名单<strong>之前</strong>：一台设了"不科学"，后面那条"大陆域名直连"就盖不到它。</p>
+<div id="device-lanes" class="lanes">
+<div class="lane" data-mode="direct">
+<h3>不科学</h3>
+<p class="lane-count">0 台</p>
+<p class="note">照常经过这台机器，只是所有域名都直连，一个都不走代理。</p>
+<ul id="dev-lane-direct" class="lane-cards"></ul>
+</div>
+<div class="lane" data-mode="global">
+<h3>跟着默认走</h3>
+<p class="lane-count">0 台</p>
+<p class="note">这台设备不单独定，跟着「默认怎么走」那一屏的档走——默认那一排设成哪一档，这一栏的设备就走哪一档。</p>
+<ul id="dev-lane-global" class="lane-cards"></ul>
+</div>
+<div class="lane" data-mode="proxy">
+<h3>强制走代理</h3>
+<p class="lane-count">0 台</p>
+<p class="note">这台设备所有域名都强制走代理，走的是「默认怎么走」里兜底出口指向的那个组。
+兜底出口还设成直连时（新装就是这样）保存仍然成功，但生成器会说"没有可去的策略组"，下发被拒——
+那句话在「现在的状态」那一屏读得到。</p>
+<ul id="dev-lane-proxy" class="lane-cards"></ul>
+</div>
+<div class="lane" data-mode="bypass">
+<h3>不接管</h3>
+<p class="lane-count">0 台</p>
+<p class="note">这台设备的流量根本不进这台机器。它和"不科学"的区别就在这一句：
+那一栏还经过本机、只是不走代理，这一栏连接管都不接管。一般留给打印机、另一台路由器，
+或者一台你不想让这个程序碰的机器。</p>
+<ul id="dev-lane-bypass" class="lane-cards"></ul>
+</div>
+</div>
+<p class="note" id="device-empty">还没有设备例外：局域网里的每一台都跟着「默认怎么走」那一屏的档走。</p>
+<div class="actions">
+<button id="add-device" class="mini" type="button">加一台设备</button>
+</div>
+<p class="note" id="device-note">加一台：先填它的地址（一台一个地址，比如 10.99.0.3；
+不要写成 10.99.0.0/24 那种一段的写法，这一段的事归「默认怎么走」），再把它拖进想要的那一栏。
+主机名与 MAC 可以留空——MAC 现在没有任何生成物消费它，主机名只在报错文案里当名字用。</p>
+</div>
+</section>
+
+<section class="page" data-view="groups">
+<div class="card">
+<h2>策略组</h2>
+<p class="note">组是把若干出站捆在一起、给兜底出口和设备例外去指的东西，两种档在机器上的待遇不一样：
+<strong>选择组</strong>（selector）由人选，面板上那个"默认成员"就是它开局走的那一个；
+<strong>测速组</strong>（urltest）按测速地址自动挑，1.14.2 <em>没有默认成员这个概念</em>，
+所以那一格在这一档里根本不画——画了能填、填了 400 退回，比报错更难查的是"看着设了其实没生效"。</p>
+<p class="note"><strong>加行的时候就定了档，已有的行不给换档</strong>：两档之间没有公共字段，
+切过去等于把另一边的键静默抹掉；要换就删了这条再按另一个按钮重加。</p>
+<p class="note">成员是一行内用<em>逗号分隔</em>的出站 tag，允许的名字就是下面那一行提示里列出来的那些
+（节点名、别的组 tag、<code>direct</code>、<code>reject</code>）：引用了不存在的成员，<strong>保存这一关就 400 退回</strong>，
+不会等到下发。测速组的间隔要写成时长（<code>3m</code> 这类），容差是纯数字。</p>
+<ul id="group-list" class="upstreams"></ul>
+<p class="note" id="group-empty">这份状态还没有策略组，兜底出口只能选直连。</p>
+<p class="note" id="group-members-hint"></p>
+<div class="actions">
+<button id="add-group-selector" class="mini" type="button">加一个选择组</button>
+<button id="add-group-urltest" class="mini" type="button">加一个测速组</button>
+</div>
+
+<h3>按名字里的词建一个地区组</h3>
+<p class="note">"某些软件只认某个地区的出口"要的是一张只装那一地区节点的组。填一个节点名里出现的词，
+下面两个按钮各建一种，成员自动挑好（比较时不分大小写）：
+<strong>锁定组</strong>在机器上是 <code>policy: fixed</code>——只用其中固定那一个，
+上游明写<strong>连通性检查会关掉</strong>，节点真挂了不会自动换；
+<strong>自动组</strong>是 <code>policy: min_avg10</code>——按十次平均延迟挑当前最优，
+挂掉的那条会不会被跳过还没实测（D2 那一轮验）。两种都靠"组里只有这些节点"来限定地区，
+差别只在要不要自动换。</p>
+<p class="note"><strong>组名不能是中文</strong>（实测：中文组名是硬解析错误，数字或点开头也是），
+所以关键词只用来挑成员；组名取那个词本身，取不出来就叫 <code>region1</code>、<code>region2</code>……
+建好之后照样能改 tag、增删成员。</p>
+<div class="rule-row">
+<input id="group-region-key" type="text" placeholder="关键词，比如 HK / SG / Tokyo" autocomplete="off" spellcheck="false">
+<button id="add-group-region-lock" class="mini" type="button">建成锁定组</button>
+<button id="add-group-region-auto" class="mini" type="button">建成自动组</button>
+</div>
+<p class="note" id="group-region-out">还没有按过。</p>
+</div>
+</section>
+
+<section class="page" data-view="nodes">
+<div class="card">
+<h2>订阅与节点</h2>
+<p class="note"><strong>有机场订阅链接就直接贴进来</strong>：按一次「导入订阅」，ZBox 去把它读成一行行出口。
+这一按只往下面那份名单里<strong>追加新名字</strong>——磁盘上你已经改过的那几条一个字都不动，
+同名的那几条原样保留；要换掉旧线路，得先在那份名单里把要换的删掉再导入，
+<strong>ZBox 不替你猜哪几条该顶掉</strong>。它<em>只写磁盘，不动数据面</em>——新读到的那些出口要在
+「让它生效」那一屏按下发之后才真的走流量。
+订阅原文（就是所有出口的凭据）只在 ZBox 自己机器上过一遍，
+<em>既不留在页面上，也不留在磁盘上</em>，回执只会告诉你读到几个、新增了哪几个名字。</p>
+<div class="rule-row">
+<input id="sub-url" type="text" placeholder="机场控制台「一键复制」的那串订阅链接，http 或 https 开头" autocomplete="off" spellcheck="false">
+<button id="sub-import" class="mini" type="button">导入订阅</button>
+</div>
+<p class="note" id="sub-out">还没有导入过。</p>
+<button id="sub-policy-link" class="mini" type="button" hidden>默认怎么走</button>
+<p class="note">这一屏回答的是"流量从哪儿出去"。一行一个出口：名字自己取（短一点、认得出来），
+再加地址、端口，和这一种自己要的那一条凭据——vless / vmess 是 UUID，
+trojan / shadowsocks / hysteria2 是密码，tuic 两个都要。</p>
+<p class="note"><strong>凭据那一格永远不从磁盘读进页面</strong>，所以它开局是空的：
+<em>留空就是这一条不动</em>，敲进去才算改——给一条已有的出口换密码，不需要先知道旧密码。
+地址与端口不是凭据，照原样读出来；同一句规矩也管着它们：没动过的字不带上去。</p>
+<p class="note"><strong>这一屏没画的细节不会因为保存而丢</strong>：传输方式、TLS 的那些选项、
+带宽与拥塞控制、<code>flow</code> 这一类，面板都不拥有，磁盘上原来写的是什么就还是什么。
+要改这些得直接编辑 <code>state.json</code>（只有伪装域名与 Reality 的公钥 / short id 是三条例外，
+因为它们最常跟着地址一起换；而伪装域名那一格只在 TLS 开着的那一条上出现——TLS 关着时那一层没有落点，
+写进去也会被读盘那一步丢掉，画出来只会让人以为改了）。</p>
+<p class="note"><strong>加行只有三档</strong>：VLESS+Reality、Hysteria2、TUIC，就是自建那三种；
+档在加的时候定，已有的行不给换档。<em>新加那一条的凭据必须填全</em>——它没有旧值可留，不填会被退回。
+这三档是给<strong>自己搭的出口</strong>用的；机场那一批出口用上面那个「导入订阅」，不用一条条粘进来。</p>
+<ul id="node-list" class="upstreams"></ul>
+<p class="note" id="node-empty">这份状态还没有节点：策略组没有成员可选，兜底出口也只能选直连。</p>
+<div class="actions">
+<button id="add-node-vless" class="mini" type="button">加一条 VLESS+Reality</button>
+<button id="add-node-hysteria2" class="mini" type="button">加一条 Hysteria2</button>
+<button id="add-node-tuic" class="mini" type="button">加一条 TUIC</button>
+</div>
+</div>
+</section>
+
+<section class="page" data-view="rulesets">
+<div class="card">
+<h2>规则集</h2>
+<p class="note">这一屏就是「让它生效」那一屏里「同步规则集」那个按钮的数据来源，两种来源在同步里的待遇不一样：
+<strong>在线源</strong>那一条会被抓下来、编译成 <code>.srs</code>、验收之后记进清单；
+<strong>本地</strong>那一条只是<em>在位检查</em>——文件不在就报出来（回执会说该放哪），ZBox 不替你造它。
+<strong>从这一屏删掉一条，同步会把它连同产物一起回收</strong>，但只回收清单记过账的产物，
+账本外的文件（你自己手放进去的）一律不碰。</p>
+<p class="note"><strong>换来源等于换一条声明</strong>：已有的行不能从本地改成在线（另一边的字段会静默消失），
+要换就删了这条再加一条新的。在线源的产物落点由 tag 派生（<code>rule-set/&lt;tag&gt;.srs</code>），
+面板不给填也不让你填——写别的落点 <code>sing-box</code> 启动时读不到，而保存这一关就 400 退回。
+本地那一格填的也是<em>相对内核状态目录</em>的路径（和在线产物同一个基准），不是绝对路径。tag 会被当文件名用：只能是字母数字加 <code>- _ .</code>，不能以 <code>.</code> 开头，两份里不能重名。</p>
+<ul id="ruleset-list" class="upstreams"></ul>
+<p class="note" id="ruleset-empty">这份状态还没有声明任何规则集。</p>
+<div class="actions">
+<button id="add-ruleset-local" class="mini" type="button">加一条本地 .srs</button>
+<button id="add-ruleset-remote" class="mini" type="button">加一条在线源</button>
+</div>
+</div>
+</section>
+
+</div>
+
+<section class="page" data-view="ladder">
+<div class="card">
+<h2>现在什么流量怎么走</h2>
+<span id="ladder-badge" class="badge">未读取</span>
+<!-- 编辑那几屏散在四张卡里（策略 / 设备例外 / 规则集 / 兜底出口），改完十几格之后这一屏给的是
+     那一句总结。「生成预览」给的是四份配置文本，对不懂程序的人不是同一句话——所以两列序号、
+     不落行的那一格为什么不落、被谁盖住，都写成人话。 -->
+<div class="actions">
+<button id="ladder-read" type="button" disabled>读取分流梯级</button>
+<span id="ladder-meta" class="note">未读取</span>
+</div>
+<p class="note" id="ladder-pending">未读取。</p>
+<p class="note" id="ladder-errors"></p>
+<ul id="ladder-rows" class="ladder"></ul>
+<p class="note" id="ladder-summary"></p>
+<p class="note" id="ladder-empty">未读取。按一下上面「读取分流梯级」。</p>
+<p class="note" id="ladder-diff"></p>
+<p class="note">这一屏<em>读的是面板的期望态（盘上那份）</em>，不是机器上正在跑的那份。两列序号分别是
+连接层（dae 的分流表）与解析层（oxidns 的查询链）<em>各自的</em>顺序——两台引擎各跑各的，
+跨层没有一个统一序号，所以一行带两个数。「没有落点」那几行不是坏了：是这一格现在这两份生成物里
+都落不成一行，原因写在那一行里。最右那列"已生效"此刻全是"—"：修订里存的是下发读的那一份
+快照（<code>config.json</code> 加内核层那三份），里面没有 dae / oxidns 的编排文本，所以
+逐行没有可比的落点——这一列要等 P4 把这两份也存进修订才会亮起来。</p>
+</div>
+</section>
+
+<section class="page" data-view="preview">
+<div class="card">
+<h2>生成预览</h2>
+<span id="preview-badge" class="badge">未读取</span>
+<!-- 只读的一屏：把磁盘上那份期望状态渲染成待下发的那四份文本，给人看一眼"我刚才那一下动了哪一行"。
+     它不落盘、不下发、不重启——这三件事仍然只在「让它生效」那一屏里发生。
+     为什么要在浏览器里做这一屏：配置文本是生成物的唯一真相，而面板上每一格对应哪一行是文档里的一张表；
+     把两边并排放出来，用户不需要看懂语法也能验收"改了=动了"。
+     为什么是四份不是两份：内核层那两份（nft 脚本与策略路由脚本）也是每次下发重写一次的生成物，
+     而 IPv6 接管姿态那一档改的正是它们。少给这两格，这一屏就会在用户换了档之后说"逐字没变"。 -->
+<div class="actions">
+<button id="preview-read" type="button" disabled>读取生成预览</button>
+<span id="preview-meta" class="note">未读取</span>
+</div>
+<h3>数据面（dae）</h3>
+<pre id="preview-dae" class="note">未读取</pre>
+<h3>DNS 面（oxidns）</h3>
+<pre id="preview-oxidns" class="note">未读取</pre>
+<h3>劫持层（zbox.nft）</h3>
+<pre id="preview-nft" class="note">未读取</pre>
+<h3>策略路由与 sysctl（netstate.sh）</h3>
+<pre id="preview-netstate" class="note">未读取</pre>
+<p class="note">标了底色的行是"这一份生成物与<em>本浏览器里上一次读到的那一份</em>不同的那一段"
+（按行号取从第一处不同到最后一处不同）。保存那一下，面板在写盘前先取了一份基准、写完又自己重读一次，
+所以<em>改完保存、切到这一屏就能看见那一次动掉的那几行，不用再按"读取"</em>——
+再按一次"读取"是和刚读过的那一份比，那时候没有底色是应该的。
+换档把 v6 那半边整个收掉时，被删掉的那些行在这一份里已经不存在、<em>画不出底色</em>——那种情况标题那句会直说
+"上一份的第 X 到 Y 行是这一次去掉的"，不会把没标色的行说成没变。
+内容逐字相同、或者渲染本身就失败了，都不会有底色——那两种情况在上方那句话里会分别说清楚。
+渲染失败时这里给的是报错原文，不是"少写了几行"：面板宁可显示一句错，也不给看一份悄悄缺了规则的配置文件。</p>
+</div>
+</section>
+
+<section class="page" data-view="logs">
+<div class="card">
+<h2>日志</h2>
+<span id="logs-badge" class="badge">未读取</span>
+<!-- 一来源一卡，而且五个来源来自<em>同一次</em>读取。为什么不做成每来源一条路由：分五次取，
+     刷新一次就可能出现"这张有那条新、那张还是上一条"的错位，而这一屏唯一在回答的就是
+     "刚刚发生了什么"。所以卡顶上那句"取数"是五张卡共用的一个时刻。
+     为什么还是"按一下读一次"而不是自动滚动：监听层是单线程顺序处理请求的，一个每两秒来一下的
+     轮询会把首屏那三次读取挤到后面去，而真正需要看一眼的时刻就三个——下发完、同步完、回滚完，
+     这三个之后面板自己读一次，平时想看就按这里。分级回执说的是"成没成"，这一屏说的是"为什么"。
+     卡片标题、那句"这一份是谁写的"、以及"为什么这一张是空的"都由服务端给：HTML 里再抄一份，
+     就是同一台机器上的第二处真相。 -->
+<div class="actions">
+<button id="logs-read" type="button" disabled>读取这几份日志</button>
+<label class="note" for="logs-filter">只看带这几个字的行</label>
+<input id="logs-filter" type="search" placeholder="例如 规则集" autocomplete="off" disabled>
+<span id="logs-meta" class="note">未读取</span>
+</div>
+<div id="logs-cards"></div>
+<pre id="logs-out" class="note">未读取。这台机器上几方各自写的日志在这里看，面板不动它们也不删它们。</pre>
+<p class="note">某一格是空的并不一定是坏事：<em>还没写过</em>、<em>这台机器上走的不是文件</em>、
+<em>我们的配置压根没给它落点</em>是三件不同的事，各有一句原因写在那一格上——它们都不是"这台机器坏了"。
+上面那个框只在<em>已经读到的</em>那几行里挑字，不会再去问机器要更多；要更多就再按一次"读取"。</p>
+</div>
+</section>
+
+<section class="page" data-view="dns-records">
+<div class="card">
+<h2>跑的是哪一份</h2>
+<span id="dnsrec-badge" class="badge">未读取</span>
+<!-- 这一格是 DNS 侧的"面板改了 = 解析器换上了没"，也就是本项目那条生死判据在解析面上的可见形态。
+     两个数的来路都是实测：oxidns 在管理口报的 running_version 是**加载进内存那一份配置的 SHA-256**
+     （改盘上那个文件而不重载时它不动），wants_version 是面板此刻这份期望态渲染出来的同一摘要。
+     "说不清"是第三种状态，也是必须存在的一种：渲染失败或上游没报这一格时，面板不能把它画成"不一样"。 -->
+<div class="actions">
+<button id="dnsrec-read" type="button" disabled>读取 DNS 记录</button>
+<span id="dnsrec-meta" class="note">未读取</span>
+</div>
+<pre id="dnsrec-apply" class="note">未读取</pre>
+<p class="note">上面那句说的是<em>解析器正在跑的那份配置</em>与<em>面板这份期望态将要生成的那份</em>是不是同一份。
+不一样就回「DNS 上游与 fakeip」那一屏确认改了什么，再去「让它生效」那一张卡按下发——
+只有下发会把新配置换上去。读不到那一句时它说的是"说不清"，不是"不一样"。</p>
+<p class="note" id="dnsrec-version">未读取。</p>
+<p class="note" id="dnsrec-errors"></p>
+</div>
+
+<div class="card">
+<h2>查询记录</h2>
+<!-- 列表这一层**没有** steps（2026-10-11 guest 实测：那一句"命中了链上哪几步"只在单条里），
+     所以这一屏是两层：这一张卡给列表，点一行才去问第二条。 -->
+<div class="field">
+<label for="dnsrec-qname">域名（服务端把 <code>example.com</code> 归一成 <code>example.com.</code>）</label>
+<input id="dnsrec-qname" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="dnsrec-client">客户端地址</label>
+<input id="dnsrec-client" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="dnsrec-status">这一条算成没成</label>
+<select id="dnsrec-status"></select>
+</div>
+<div class="field">
+<label for="dnsrec-limit">一页几条</label>
+<input id="dnsrec-limit" type="number" min="1" max="200" step="1">
+</div>
+<div class="actions">
+<button id="dnsrec-more" type="button" disabled>看更早的一页</button>
+<span id="dnsrec-page" class="note"></span>
+</div>
+<ul id="dnsrec-list" class="records"></ul>
+<p class="note" id="dnsrec-empty">未读取。按一下上面「读取 DNS 记录」。</p>
+<p class="note">「DNS 上游与 fakeip」那一屏的<em>记下每一次查询</em>勾掉并<em>下发之后</em>，这一屏会<em>一直是空的</em>——那是那一格造成的，
+不是采集坏了；还没下发时解析器跑的是上一份，这一屏读到的还是旧记录。取数走的是 oxidns 的管理 API，它只绑回环，所以只有这台机器自己读得到；
+面板不直读那份 SQLite，也不删它。</p>
+</div>
+
+<div class="card">
+<h2>这一条命中了链上哪几步</h2>
+<span id="dnsrec-detail-meta" class="note">还没点某一行</span>
+<pre id="dnsrec-detail" class="note">点上面任意一行来看这一条查询走过的每一步，以及它最后是怎么收场的。</pre>
+<ul id="dnsrec-steps" class="steps"></ul>
+<p class="note">每一步是"这个执行器/匹配器被问到了没有、有没有命中、结果是什么"。
+<em>error</em> 那几步会标出来：一次失败的解析往往是链上一路往回传的好几处，
+只看最后那个应答码看不出来是谁把它拖失败的。</p>
+</div>
+</section>
+
+<section class="page" data-view="deploy">
+<div class="card card--danger">
+<h2>下发</h2>
+<span class="badge badge--bad">会掐断连接</span>
+<button id="apply" type="button" disabled>显式下发当前期望状态</button>
+<p class="warn">下发会重启数据面，所有在用连接会被掐断一次。</p>
+<pre id="apply-out" class="note"></pre>
+</div>
+
+<div class="card">
+<h2>动作</h2>
+<!-- 一句话解释这一屏为什么是三个按钮：会掐断连接的那一步（下发、回滚）不藏在别的按钮后面，
+     而"开启劫持"前面有一道门是内核必须先在听——顺序反了局域网侧是 Connection refused。
+     三块各用一条虚线子块隔开：它们动的东西完全不同（文件 / 内核规则 / 整个修订），
+     混在一张没有分隔的卡里，"这一按会断网"就只能在三行小字里自己找。 -->
+<div class="sub">
+<h3>同步规则集</h3>
+<div class="actions">
+<button id="sync-rulesets" type="button" disabled>同步规则集</button>
+<label class="check"><input id="sync-force" type="checkbox"> 无视新鲜度全部重抓</label>
+</div>
+<pre id="sync-out" class="note"></pre>
+</div>
+<div class="sub">
+<h3>劫持层</h3>
+<div class="actions">
+<button id="hijack-on" type="button" disabled>开启劫持</button>
+<button id="hijack-off" type="button" disabled>关闭劫持</button>
+</div>
+<pre id="hijack-out" class="note"></pre>
+</div>
+<div class="sub sub--danger">
+<h3>回滚</h3>
+<!-- 修订号要人抄，就等于不许回滚：它是"13 位毫秒 + 16 位十六进制"共 30 个字符，
+     而这一按会掐断在用连接——抄错一份的代价恰好是最大的那一种。所以这里是一张从机器读来的
+     清单（最新在前），选项的文案由 JS 灌：HTML 里写死一份就会漂成"屏幕上的清单与机器上的不是一份"。 -->
+<div class="actions">
+<button id="rollback" type="button" disabled>回滚到某个修订</button>
+<select id="rollback-revision"></select>
+</div>
+<p class="note">清单来自现场读数那一次读取（<code>GET /api/status</code>），最新在前；第一项不带修订号，
+回滚的是"已知良好那一份"。时间按你这台浏览器的时钟渲染，机器自己的表可能与之不同。</p>
+<pre id="rollback-out" class="note"></pre>
+</div>
+</div>
+</section>
+
+</main>
+</div>
+
+<script src="/panel.js"></script>
+</body>
+</html>
