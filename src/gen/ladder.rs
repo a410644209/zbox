@@ -439,6 +439,7 @@ mod tests {
                 transport: Transport::Tcp,
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         }
     }
 
@@ -478,18 +479,24 @@ mod tests {
             ip: "192.0.2.30".into(),
             mac: None,
             hostname: Some("电视".into()),
+            display_name: None,
+            ip_type: crate::model::device::IpType::Dhcp,
             mode: DeviceMode::Direct,
         });
         state.devices.push(Device {
             ip: "192.0.2.31".into(),
             mac: None,
             hostname: None,
+            display_name: None,
+            ip_type: crate::model::device::IpType::Dhcp,
             mode: DeviceMode::Global,
         });
         state.devices.push(Device {
             ip: "192.0.2.32".into(),
             mac: None,
             hostname: None,
+            display_name: None,
+            ip_type: crate::model::device::IpType::Dhcp,
             mode: DeviceMode::Bypass,
         });
         state.policy.domain_rules = vec![

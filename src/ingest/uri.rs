@@ -105,6 +105,7 @@ fn parse_stream(rest: &str, scheme: &str) -> Result<Node, LinkError> {
             transport,
             tls,
         },
+        delay_ms: None,
     })
 }
 
@@ -133,6 +134,7 @@ fn parse_hysteria2(rest: &str) -> Result<Node, LinkError> {
                 tls: build_tls(&p.query)?,
             },
         },
+        delay_ms: None,
     })
 }
 
@@ -164,6 +166,7 @@ fn parse_tuic(rest: &str) -> Result<Node, LinkError> {
                 tls: build_tls(&p.query)?,
             },
         },
+        delay_ms: None,
     })
 }
 
@@ -236,6 +239,7 @@ fn parse_vmess(rest: &str) -> Result<Node, LinkError> {
             transport,
             tls,
         },
+        delay_ms: None,
     })
 }
 
