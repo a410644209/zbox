@@ -893,103 +893,27 @@ mod tests {
         let js = body("/panel.js");
         let css = body("/panel.css");
 
-        // 四栏一档，一栏都不能少：少一栏 = 那一档的设备没有落点，会被静默丢掉。
+        // 三栏路由：直连 / 智能分流 / 全局
         assert!(
-            html.contains("id=\"device-lanes\" class=\"lanes\""),
-            "HTML 没有那四栏的容器"
+            html.contains("class=\"routing-lanes\""),
+            "HTML 没有三栏路由容器"
         );
-        for mode in ["direct", "global", "proxy", "bypass"] {
+        for mode in ["direct", "smart", "global"] {
             assert!(
-                html.contains(&format!("class=\"lane\" data-mode=\"{mode}\"")),
+                html.contains(&format!("id=\"lane-{mode}\"")),
                 "HTML 少了「{mode}」这一栏"
             );
-            assert!(
-                html.contains(&format!("id=\"dev-lane-{mode}\" class=\"lane-cards\"")),
-                "「{mode}」这一栏里没有放卡片的名单"
-            );
-            assert!(js.contains(&format!("\"{mode}\"")), "JS 那四档名单里没有 {mode}");
+            assert!(js.contains(&format!("\"{mode}\"")), "JS 那三档名单里没有 {mode}");
         }
-        // 栏的清单只由 HTML 给（JS 按 `data-mode` 认栏），不在脚本里再抄一份栏名
-        assert!(
-            js.contains("getAttribute(\"data-mode\")"),
-            "JS 没按 data-mode 认栏，而是自己抄了一份栏名"
-        );
-        assert!(js.contains(".lane-cards"), "JS 没引用栏里的名单");
 
-        // 三条界要留在屏幕上，不是只留在注释里：拖的是档不是条、这几台之间没有先后、
-        // 例外排在域名名单之前。
-        for sentence in [
-            "一栏就是一档",
-            "拖的是\"哪一档\"，不是\"哪一条\"",
-            "这些例外排在域名名单",
-        ] {
-            assert!(html.contains(sentence), "HTML 少了那一句界：{sentence}");
-        }
-        // 栏题与卡片上那一档的选项，必须是同一批人话（两处各写一遍就会漂）。
-        // 「跟着默认走」与「强制走代理」这两个名字本身就是判据：这一栏住的是
-        // `DeviceMode::Global`（跟着「默认怎么走」那一排走），默认设成不科学时它就是全部直连，
-        // 所以栏名**不能**叫「智能分流」——那是那一排第二档的名字，写在这儿就是当默认不是智能分流时
-        // 屏幕说谎。同理栏名不能叫「全局」：它和那一排第三档「全局」同名不同义（那一档=所有域名走代理，
-        // 这一栏=这一台强制走代理），两个人话名字撞在一屏上会指错东西。
-        for head in ["不科学", "跟着默认走", "强制走代理", "不接管"] {
+        // 栏题
+        for head in ["直连", "智能分流", "全局"] {
             assert!(html.contains(&format!("<h3>{head}</h3>")), "HTML 的栏题少了「{head}」");
-            assert!(js.contains(head), "JS 那一档的选项文字里没有「{head}」");
-        }
-        for wrong in ["<h3>智能分流</h3>", "<h3>全局</h3>"] {
-            assert!(
-                !html.contains(wrong),
-                "设备栏的栏题又变回「{wrong}」——那两个字是「默认怎么走」那一排的档名，不是这一栏的语义"
-            );
         }
 
-        // 上一版那张平表留下的三样东西不许回来：序号、上下移动、程序员口径的句子。
-        assert!(
-            !js.contains("renumberRows(\"device"),
-            "JS 还在给设备行编号——那一屏没有先后这回事"
-        );
-        assert!(!html.contains("device-list"), "HTML 里还有上一版的 #device-list");
-        assert!(!js.contains("device-list"), "JS 里还有上一版的 #device-list");
-        for jargon in [
-            "不跟着走（bypass）",
-            "source_ip_cidr",
-            "不要带 <code>/段</code>",
-        ] {
-            assert!(
-                !html.contains(jargon),
-                "HTML 的屏幕上还留着程序员口径的 {jargon:?}"
-            );
-        }
-
-        // 拖与不拖落到同一处：定义一处 + 两条路各一处，多一处就说明有人另起了一条落地。
-        assert!(js.contains("function putDeviceCard("), "JS 没有那个唯一的落地函数");
-        assert_eq!(
-            js.matches("putDeviceCard(").count(),
-            3,
-            "换栏的落地不止一处（定义 + 拖动 + 改选），屏幕上会出现卡与档不一致"
-        );
-        for handler in ["dragstart", "dragover", "dragleave", "drop", "dragend", "dev-grip"] {
-            assert!(js.contains(handler), "JS 没接 {handler}：拖动这条路是断的");
-        }
-        // 不认识的那一档没有栏可住，但卡片要写明它为什么在这儿——静默丢掉才是事故
-        assert!(js.contains("dev-warn"), "JS 没给不认识的那一档留提示");
-        assert!(
-            js.contains("li.original.mode = \"global\""),
-            "JS 没定缺 `mode` 时落哪一档（不定的话一次没动过的保存会凭空多出一条规则）"
-        );
-
-        for selector in [
-            ".lanes {",
-            ".lane {",
-            ".lane-cards {",
-            ".lane-count",
-            ".dev-card {",
-            ".dev-grip {",
-            ".dev-warn {",
-            ".lane.drop {",
-            "repeat(4, minmax(0, 1fr))",
-        ] {
-            assert!(css.contains(selector), "CSS 里没有 {selector}");
-        }
+        // 设备卡片样式
+        assert!(css.contains(".routing-card"), "CSS 没有设备卡片样式");
+        assert!(css.contains(".routing-lanes"), "CSS 没有三栏布局样式");
     }
 
     /// 「默认怎么走」那一屏顶上的三档开关（§11.8 那条界的落地）：用户口述的
@@ -1289,9 +1213,9 @@ mod tests {
         );
     }
 
-    /// §11.3 D 那一句「要改回来点这里」的落地：回执说动了「默认怎么走」那一档，
+    /// §11.3 D 那一句「要改回来点这里」的落地：回执说动了「流量怎么走」那一档，
     /// 屏幕上就得有一个真能按的去处，而且三处名字要相同（导航 label、页题、按钮文字）——
-    /// 按钮写着「默认怎么走」而点开那一屏的页题是别的名字，就是那句话指错了地方。
+    /// 按钮写着「流量怎么走」而点开那一屏的页题是别的名字，就是那句话指错了地方。
     /// 第二条判据只属于这一按：它是**常驻还是收回**。这一按没动那一档的时候
     /// （第二次导入、导入失败、脏表单被拒）按钮必须收起来，否则它指的是上一次的回执。
     #[test]
@@ -1301,22 +1225,22 @@ mod tests {
         let css = body("/panel.css");
         // 三处名字逐字相同
         assert!(
-            html.contains("<span class=\"label\">默认怎么走</span>"),
-            "导航里那一屏不叫「默认怎么走」，按钮和回执那一句就都指错了"
+            html.contains("<span class=\"label\">流量怎么走</span>"),
+            "导航里那一屏不叫「流量怎么走」，按钮和回执那一句就都指错了"
         );
         assert!(
-            html.contains("id=\"sub-policy-link\" class=\"mini\" type=\"button\" hidden>默认怎么走</button>"),
-            "HTML 里那枚按钮不写「默认怎么走」，或开局不是 hidden"
+            html.contains("id=\"sub-policy-link\" class=\"mini\" type=\"button\" hidden>流量怎么走</button>"),
+            "HTML 里那枚按钮不写「流量怎么走」，或开局不是 hidden"
         );
         assert!(
-            js.contains("policy: [\"默认怎么走\","),
-            "JS 的 PAGES 页题不是「默认怎么走」，点进去顶栏会换一个名字"
+            js.contains("routing: [\"流量怎么走\","),
+            "JS 的 PAGES 页题不是「流量怎么走」，点进去顶栏会换一个名字"
         );
         // 按下去真的去那一屏
         assert!(
             js.contains("document.getElementById(\"sub-policy-link\").addEventListener(\"click\"")
-                && js.contains("setView(\"policy\");"),
-            "JS 没把这枚按钮接到「默认怎么走」那一屏，它就是块死字"
+                && js.contains("setView(\"routing\");"),
+            "JS 没把这枚按钮接到「流量怎么走」那一屏，它就是块死字"
         );
         // 回执那个字段被读了：这一按**有没有**动那一档只有服务端知道
         assert!(
@@ -1553,7 +1477,7 @@ mod tests {
         views.sort();
         views.dedup();
         assert!(
-            views.len() >= 16,
+            views.len() >= 15,
             "分屏外壳只剩 {} 屏：{}",
             views.len(),
             views.join(", ")
@@ -1682,7 +1606,7 @@ mod tests {
             "有一屏既被算进普通档又被算进高级档"
         );
         assert!(
-            union.len() >= 16,
+            union.len() >= 15,
             "两档并起来只剩 {} 屏，外壳是不是少了屏：{}",
             union.len(),
             union.join(", ")
@@ -1772,7 +1696,7 @@ mod tests {
         let html = body("/");
         let js = body("/panel.js");
         let items = html.matches("class=\"nav-item\"").count();
-        assert!(items >= 16, "HTML 只剩 {items} 个导航项");
+        assert!(items >= 15, "HTML 只剩 {items} 个导航项");
         let mut compared = 0usize;
         let mut rest = html;
         while let Some(at) = rest.find("data-view=\"") {
@@ -1844,11 +1768,10 @@ mod tests {
             vec![
                 "连接与令牌",
                 "订阅与节点",
-                "默认怎么走",
-                "某台设备单独走",
+                "流量怎么走",
                 "让它生效"
             ],
-            "必经那五屏的名字或**先后**变了：说明书的顺序就是主路的顺序"
+            "必经那四屏的名字或**先后**变了：说明书的顺序就是主路的顺序"
         );
 
         // ② 点名的按钮既要真有其物，也要说明书里确实这么引的
@@ -2123,13 +2046,13 @@ mod tests {
             .collect();
         assert_eq!(
             counts,
-            vec![5, 3, 8],
+            vec![4, 3, 8],
             "侧栏三组各几屏变了：说明书那句「五屏」「三屏」得跟着改数"
         );
         assert_eq!(
             page.matches("data-tier=\"basic\"").count(),
-            8,
-            "普通档的屏数不是 8：上面那 5 + 3 与档位开关是同一件事的两处写法"
+            7,
+            "普通档的屏数不是 7：上面那 4 + 3 与档位开关是同一件事的两处写法"
         );
         assert_eq!(
             page.matches("data-tier=\"advanced\"").count(),
@@ -2144,8 +2067,8 @@ mod tests {
             .expect("连接屏上没有「这条路怎么走」那张卡");
         let card = &after_head[..after_head.find("</div>").expect("那张卡的 </div> 收尾没了")];
         assert!(
-            card.contains("「照着做」五屏"),
-            "说明书不再逐字说「五屏」：上面数出来的五屏与它说的话脱钩了"
+            card.contains("「照着做」四屏"),
+            "说明书不再逐字说「四屏」：上面数出来的四屏与它说的话脱钩了"
         );
         assert!(
             card.contains("「现在怎么样」三屏"),

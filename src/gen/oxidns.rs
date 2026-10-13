@@ -26,6 +26,9 @@ use crate::model::config::{
 use crate::model::device::{Device, DeviceMode};
 use std::fmt::Write as _;
 
+/// oxidns 配置在快照目录里的相对路径。
+pub const OXIDNS_PATH: &str = "oxidns.yaml";
+
 /// 管理 API 的监听地址。**写死且只绑回环**：这一面能改配置、能读全部解析记录，
 /// 而这份 YAML 将来会带着主路由的凭据——它不该出现在局域网面上。
 ///
@@ -734,6 +737,8 @@ mod tests {
             mac: None,
             hostname: hostname.map(str::to_string),
             mode,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         }
     }
 

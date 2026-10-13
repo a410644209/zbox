@@ -1042,6 +1042,8 @@ mod tests {
             mac: None,
             hostname: Some(ip.into()),
             mode,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         }
     }
 

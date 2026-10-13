@@ -250,12 +250,16 @@ mod tests {
                 mac: None,
                 hostname: Some("电视".into()),
                 mode: DeviceMode::Bypass,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
             Device {
                 ip: "192.168.1.60".into(),
                 mac: None,
                 hostname: None,
                 mode: DeviceMode::Proxy,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
         ];
         let text = render(&s);
@@ -376,12 +380,16 @@ mod tests {
                 mac: None,
                 hostname: None,
                 mode: DeviceMode::Bypass,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
             Device {
                 ip: "fd00:db8:1::30".into(),
                 mac: None,
                 hostname: None,
                 mode: DeviceMode::Bypass,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
         ];
         let text = render(&s);

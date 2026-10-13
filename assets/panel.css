@@ -1152,3 +1152,401 @@ ul.upstreams {
     grid-template-columns: 1fr;
   }
 }
+
+/* —— 订阅元信息网格（剩余流量、重置倒计时、到期时间） —— */
+.sub-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .75rem;
+  margin-top: .8rem;
+  padding: .75rem;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.sub-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+
+.sub-meta-item .sub-meta-label {
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+.sub-meta-item .sub-meta-value {
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* —— 策略组与节点网格 —— */
+#groups-container {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.group-card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: .75rem;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .5rem;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.group-title {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.group-subtitle {
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+.node-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: .4rem;
+}
+
+.node-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .35rem .5rem;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: .82rem;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+
+.node-cell:hover {
+  background: var(--panel);
+  border-color: var(--line-strong);
+}
+
+.node-cell.selected {
+  background: var(--accent);
+  border-color: var(--accent-hi);
+  color: #fff;
+}
+
+.node-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: .5rem;
+}
+
+.node-delay {
+  font-size: .75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* 延迟颜色：<100ms 绿，100-300ms 橙，>300ms 红，超时灰 */
+.node-delay.fast {
+  color: var(--good);
+}
+
+.node-delay.medium {
+  color: var(--warn);
+}
+
+.node-delay.slow {
+  color: var(--bad);
+}
+
+.node-delay.timeout {
+  color: var(--muted);
+}
+
+/* 节点编辑器（高级档） */
+#node-editor {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+/* ========== 流量怎么走（routing）屏 ========== */
+
+/* ZBox 本机卡片 */
+.zbox-card {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .6rem .8rem;
+  margin: .8rem 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--raised);
+}
+
+.zbox-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.zbox-info {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+}
+
+.zbox-name {
+  font-size: .95rem;
+  font-weight: 600;
+}
+
+.zbox-ip {
+  color: var(--muted);
+  font-size: .78rem;
+  font-family: ui-monospace, "SF Mono", "Consolas", monospace;
+}
+
+/* 设备搜索栏 */
+.device-search {
+  display: flex;
+  gap: .4rem;
+  margin: .6rem 0;
+}
+
+.device-search input {
+  flex: 1;
+  padding: .4rem .55rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+}
+
+.device-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 三栏路由布局 */
+.routing-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .6rem;
+  margin-top: .8rem;
+}
+
+.routing-lanes .lane {
+  min-width: 0;
+  padding: .6rem .6rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  transition: border-color .15s, background .15s;
+}
+
+.routing-lanes .lane-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .3rem;
+}
+
+.routing-lanes .lane-header h3 {
+  margin: 0;
+  font-size: .95rem;
+}
+
+.routing-lanes .lane-count {
+  color: var(--muted);
+  font-size: .74rem;
+  white-space: nowrap;
+}
+
+.routing-lanes .lane-note {
+  margin: .2rem 0 .4rem;
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.4;
+}
+
+/* 拖拽高亮 */
+.routing-lanes .lane.drop {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* 设备卡片（routing 屏） */
+.routing-lanes .lane-cards {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+  gap: .4rem;
+  margin: .4rem 0 0;
+  padding: 0;
+  min-height: 3rem;
+}
+
+.routing-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: .5rem .3rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--raised);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .1s, background .1s, transform .1s;
+  min-height: 3.2rem;
+}
+
+.routing-card:hover {
+  border-color: var(--accent-hi);
+}
+
+.routing-card.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.routing-card.dragging {
+  opacity: .5;
+  transform: scale(.95);
+}
+
+.routing-card .card-name {
+  font-size: .95rem;
+  font-weight: 600;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.routing-card .card-ip {
+  font-size: .65rem;
+  color: var(--muted);
+  text-align: center;
+  margin-top: .15rem;
+  font-family: ui-monospace, "SF Mono", "Consolas", monospace;
+}
+
+/* 设备详情弹窗 */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .6);
+  z-index: 1000;
+}
+
+.modal-content {
+  width: 90%;
+  max-width: 28rem;
+  padding: 1.2rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.modal-content h3 {
+  margin: 0 0 .8rem;
+  font-size: 1.05rem;
+}
+
+.modal-content .field {
+  margin-bottom: .7rem;
+}
+
+.modal-content .field label {
+  display: block;
+  margin-bottom: .25rem;
+  font-size: .82rem;
+  color: var(--muted);
+}
+
+.modal-content .field input[type="text"] {
+  width: 100%;
+  padding: .4rem .5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+}
+
+.modal-content .field input[readonly] {
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+.radio-group {
+  display: flex;
+  gap: 1rem;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  cursor: pointer;
+  font-size: .85rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: .5rem;
+  margin-top: 1rem;
+  justify-content: flex-end;
+}
+
+.modal-actions .danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.modal-actions .danger:hover {
+  background: color-mix(in srgb, var(--bad) 15%, transparent);
+}
+
+/* 响应式 */
+@media (max-width: 60rem) {
+  .routing-lanes {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 40rem) {
+  .routing-lanes .lane-cards {
+    grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr));
+  }
+}

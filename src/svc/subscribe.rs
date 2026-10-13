@@ -8,7 +8,7 @@
 use super::ruleset::{detect_downloader, download_body, FetchLimits};
 use super::runner::Runner;
 use crate::gen::init::Layout;
-use crate::ingest::subscription::{self, Parsed};
+use crate::ingest::subscription::{self, Meta, Parsed};
 use std::fs;
 
 /// 订阅链接的长度上限。机场链接是"一串 query 参数带令牌"，实测几十到几百字节；
@@ -77,8 +77,8 @@ impl<'a> Subscribe<'a> {
         std::path::Path::new(&self.layout.state_dir()).join("subscription.download")
     }
 
-    /// 抓一次订阅并解析成节点。**不落盘、不改状态**——那一步由调用方在磁盘指纹的保护下做。
-    pub fn load(&self, url: &str) -> Result<Parsed, FetchFailure> {
+    /// 抓一次订阅并解析成节点和账户元数据。**不落盘、不改状态**——那一步由调用方在磁盘指纹的保护下做。
+    pub fn load(&self, url: &str) -> Result<(Parsed, Meta), FetchFailure> {
         let tmp = self.temp_path();
         // 新开的一台机器上状态目录还不存在（`state::write` 也是自己建的），而下拉器是
         // `wget -O <那个目录>/subscription.download`——目录不在它就退出在"找不到路径"上，
@@ -96,7 +96,9 @@ impl<'a> Subscribe<'a> {
             FetchLimits::SOURCE,
         )
         .map_err(FetchFailure::Downstream)?;
-        subscription::parse(&body).map_err(FetchFailure::Unreadable)
+        let parsed = subscription::parse(&body).map_err(FetchFailure::Unreadable)?;
+        let meta = parsed.meta.clone();
+        Ok((parsed, meta))
     }
 }
 
@@ -197,7 +199,7 @@ mod tests {
             body: STANDARD.encode(L1).into_bytes(),
         };
         let subscribe = Subscribe::new(&layout, &fetcher);
-        let parsed = subscribe
+        let (parsed, _meta) = subscribe
             .load("https://x.example/sub?token=1")
             .expect("该读成一个节点");
         assert_eq!(parsed.nodes.len(), 1);

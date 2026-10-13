@@ -135,6 +135,9 @@ pub struct Parsed {
     /// 形状像链接、但 ZBox 读不懂的那几条。它们不挡导入（机场加一种新协议是常态），
     /// 但必须报得出数——只说"成功 12 个"，人就永远看不到少了 3 个这件事。
     pub skipped: usize,
+    /// 从信息条目（"剩余流量"、"到期时间"等）里解析出的账户信息。
+    /// 这些条目不是可选线路，不能进节点名单，但用户要看得到。
+    pub meta: Meta,
 }
 
 pub fn parse(body: &[u8]) -> Result<Parsed, SubscriptionError> {
@@ -154,10 +157,13 @@ pub fn parse(body: &[u8]) -> Result<Parsed, SubscriptionError> {
 
     let mut nodes = Vec::new();
     let mut failed = 0usize;
+    let mut meta = Meta::default();
     for link in split_links(&payload) {
         match parse_link(link) {
             Ok(node) => {
                 if is_info_entry(&node.name) {
+                    // 从信息条目里解析账户元数据（到期时间、流量等）
+                    extract_meta_from_info(&node.name, &mut meta);
                     continue;
                 }
                 nodes.push(node);
@@ -173,6 +179,7 @@ pub fn parse(body: &[u8]) -> Result<Parsed, SubscriptionError> {
         format,
         nodes,
         skipped: failed,
+        meta,
     })
 }
 
@@ -193,6 +200,61 @@ fn is_info_entry(name: &str) -> bool {
         "客服",
     ];
     MARKERS.iter().any(|m| name.contains(m))
+}
+
+/// 从信息条目的名字里解析出账户元数据（到期时间、流量等）。
+///
+/// 机场把这些信息编成节点链接，名字格式不统一，实测到的形状：
+/// - "套餐到期：2027-01-14" / "到期时间：2024-12-31"
+/// - "剩余流量：100 GB" / "已用流量：50 GB"
+///
+/// 只解析能认出来的那几项，认不出的就丢掉——信息条目本来就不是节点，
+/// 留在名单里会被 urltest 拿去测速，所以必须过滤，但过滤前能捞一点是一点。
+fn extract_meta_from_info(name: &str, meta: &mut Meta) {
+    // 到期时间：尝试解析 "到期：YYYY-MM-DD" 或 "到期：YYYY-MM-DD HH:MM:SS"
+    if name.contains("到期") || name.contains("到期时间") {
+        if let Some(date_str) = name.split(['：', ':']).nth(1).map(str::trim) {
+            // 尝试解析日期（只取前 10 个字符：YYYY-MM-DD）
+            if date_str.len() >= 10 {
+                if let Some(ts) = parse_date_to_timestamp(&date_str[..10]) {
+                    meta.expire = Some(ts);
+                }
+            }
+        }
+    }
+    // 流量信息暂不解析：格式太不统一（"100 GB"、"100GB"、"102400 MB"），
+    // 而且 total/used 需要两个都解析出来才能算剩余，复杂度不值得。
+    // 等有了真实订阅样本再补。
+}
+
+/// 手动解析 "YYYY-MM-DD" 格式的日期为 Unix 时间戳（UTC 00:00:00）。
+/// 不用 `chrono`：零新依赖是硬约束，标准库没有日期解析，手写一个够用就行。
+fn parse_date_to_timestamp(date_str: &str) -> Option<i64> {
+    let parts: Vec<&str> = date_str.split('-').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let year: i64 = parts[0].parse().ok()?;
+    let month: i64 = parts[1].parse().ok()?;
+    let day: i64 = parts[2].parse().ok()?;
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    // 简化的时间戳计算：从 1970-01-01 开始
+    // 不考虑闰秒，够用到 2100 年
+    let days_from_epoch = |y: i64, m: i64, d: i64| -> i64 {
+        let mut days = (y - 1970) * 365 + (y - 1969) / 4 - (y - 1901) / 100 + (y - 1601) / 400;
+        let month_days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        for i in 0..(m - 1) {
+            days += month_days[i as usize];
+        }
+        // 闰年调整
+        if m > 2 && (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) {
+            days += 1;
+        }
+        days + d - 1
+    };
+    Some(days_from_epoch(year, month, day) * 86400)
 }
 
 /// 同名节点在订阅里非常常见（多条线路同名），面板需要可区分的名字。
@@ -356,9 +418,25 @@ mod tests {
         .collect::<Vec<_>>()
         .join("\n");
         let body = format!("{info}\n{L1}\n{L2}");
-        let nodes = parse(body.as_bytes()).unwrap().nodes;
-        let names: Vec<&str> = nodes.iter().map(|n| n.name.as_str()).collect();
+        let parsed = parse(body.as_bytes()).unwrap();
+        let names: Vec<&str> = parsed.nodes.iter().map(|n| n.name.as_str()).collect();
         assert_eq!(names, vec!["东京", "首尔"]);
+        // 到期时间被解析成时间戳：2027-01-14 -> 1799884800 (UTC)
+        assert_eq!(parsed.meta.expire, Some(1_799_884_800));
+    }
+
+    #[test]
+    fn parse_date_to_timestamp_handles_common_dates() {
+        // 1970-01-01 = 0
+        assert_eq!(parse_date_to_timestamp("1970-01-01"), Some(0));
+        // 2027-01-14 = 1799884800
+        assert_eq!(parse_date_to_timestamp("2027-01-14"), Some(1_799_884_800));
+        // 2024-12-31 = 1735603200
+        assert_eq!(parse_date_to_timestamp("2024-12-31"), Some(1_735_603_200));
+        // 无效日期
+        assert_eq!(parse_date_to_timestamp("not-a-date"), None);
+        assert_eq!(parse_date_to_timestamp("2024-13-01"), None);
+        assert_eq!(parse_date_to_timestamp("2024-00-01"), None);
     }
 
     #[test]

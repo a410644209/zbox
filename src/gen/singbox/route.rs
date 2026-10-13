@@ -423,24 +423,32 @@ mod tests {
                 mac: None,
                 hostname: Some("电视".into()),
                 mode: DeviceMode::Direct,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
             Device {
                 ip: "192.168.1.60".into(),
                 mac: None,
                 hostname: None,
                 mode: DeviceMode::Proxy,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
             Device {
                 ip: "192.168.1.70".into(),
                 mac: None,
                 hostname: None,
                 mode: DeviceMode::Bypass,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
             Device {
                 ip: "192.168.1.80".into(),
                 mac: None,
                 hostname: None,
                 mode: DeviceMode::Global,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
         ];
         let got = rules(&s);
@@ -669,6 +677,8 @@ mod tests {
             mac: None,
             hostname: None,
             mode: DeviceMode::Direct,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         }];
         let ranges = json!([
             s.dns.fakeip.inet4_range.clone(),
@@ -757,6 +767,8 @@ mod tests {
             mac: None,
             hostname: Some("手机".into()),
             mode: DeviceMode::Proxy,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         }];
         match route_json(&s) {
             Err(RouteError::NoProxyGroup { device }) => assert_eq!(device, "手机"),
