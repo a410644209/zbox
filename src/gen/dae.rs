@@ -24,6 +24,9 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
 use std::fmt::Write as _;
 
+/// dae 配置文件在状态目录里的相对路径。
+pub const DAE_PATH: &str = "dae.conf";
+
 /// dae 的内置出站名，策略组不许占用（重名会让"这一行指向谁"变得含混）。
 const RESERVED_OUTBOUND: [&str; 3] = ["direct", "must_direct", "block"];
 
@@ -794,6 +797,7 @@ mod tests {
                 transport: Transport::Tcp,
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         }
     }
 
@@ -972,6 +976,8 @@ mod tests {
             ip: "192.168.1.50".into(),
             mac: None,
             hostname: Some("客厅电视".into()),
+            display_name: None,
+            ip_type: crate::model::device::IpType::Dhcp,
             mode: DeviceMode::Direct,
         });
         let text = render(&s).unwrap();
@@ -988,6 +994,8 @@ mod tests {
             ip: "192.168.1.60".into(),
             mac: None,
             hostname: None,
+            display_name: None,
+            ip_type: crate::model::device::IpType::Dhcp,
             mode: DeviceMode::Proxy,
         });
         let err = render(&s).unwrap_err();
@@ -1002,6 +1010,8 @@ mod tests {
                 ip: "192.168.1.70".into(),
                 mac: None,
                 hostname: None,
+                display_name: None,
+                ip_type: crate::model::device::IpType::Dhcp,
                 mode,
             });
         }
@@ -1249,6 +1259,7 @@ mod tests {
                     ..Default::default()
                 }),
             },
+            delay_ms: None,
         };
         let link = node_link(&n).unwrap();
         let body = link
@@ -1293,6 +1304,7 @@ mod tests {
                     ..Default::default()
                 }),
             },
+            delay_ms: None,
         };
         let link = node_link(&n).unwrap();
         assert!(link.starts_with("vless://u1@example.com:443?"), "{link}");
@@ -1331,6 +1343,7 @@ mod tests {
                     }),
                 },
             },
+            delay_ms: None,
         };
         let link = node_link(&n).unwrap();
         assert!(
@@ -1366,6 +1379,7 @@ mod tests {
                     tls: Tls::Disabled,
                 },
             },
+            delay_ms: None,
         };
         assert!(node_link(&n).unwrap_err().contains("同时给"));
     }
@@ -1383,6 +1397,7 @@ mod tests {
                 transport: Transport::Tcp,
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         };
         assert_eq!(node_link(&n).unwrap(), "trojan://p@[2001:db8::1]:443#v6");
     }
@@ -1405,6 +1420,7 @@ mod tests {
                     tls: Tls::Disabled,
                 },
             },
+            delay_ms: None,
         };
         assert!(node_link(&tuic).unwrap_err().contains("G11"));
 
@@ -1423,6 +1439,7 @@ mod tests {
                 },
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         };
         assert!(node_link(&grpc).unwrap_err().contains("G11"));
     }

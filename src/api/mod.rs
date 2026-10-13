@@ -217,6 +217,7 @@ const ROUTES: &[(&str, Method)] = &[
     ("/api/hijack/enable", Method::Post),
     ("/api/hijack/disable", Method::Post),
     ("/api/rollback", Method::Post),
+    ("/api/nodes/ping", Method::Post),
 ];
 
 pub struct App<'a> {
@@ -307,6 +308,7 @@ impl<'a> App<'a> {
             (Method::Post, "/api/hijack/enable") => self.hijack_enable(req),
             (Method::Post, "/api/hijack/disable") => self.hijack_disable(req),
             (Method::Post, "/api/rollback") => self.rollback(req),
+            (Method::Post, "/api/nodes/ping") => self.nodes_ping(req),
             _ => {
                 let known = ROUTES.iter().any(|(p, _)| *p == req.path);
                 if known {
@@ -552,7 +554,7 @@ impl<'a> App<'a> {
                 Err(detail) => return Response::fail(409, detail),
             }
         };
-        let parsed = match self.svc.subscription().load(&url) {
+        let (parsed, _meta) = match self.svc.subscription().load(&url) {
             Ok(parsed) => parsed,
             Err(got @ subscribe::FetchFailure::Unreadable(_)) => {
                 return Response::fail(400, got.to_string())
@@ -826,6 +828,66 @@ impl<'a> App<'a> {
             Err(RollbackError::NotFound(detail)) => Response::fail(400, detail),
             Err(RollbackError::Failed(detail)) => Response::fail(500, detail),
         }
+    }
+
+    /// `POST /api/nodes/ping`：对指定节点（或全部）做 TCP 连接测速，结果写回磁盘。
+    /// 请求体可选 `{"nodes": ["name1", "name2"]}`；空数组或不传都意味着"全部"。
+    fn nodes_ping(&self, req: &Request<'_>) -> Response {
+        let path = self.state_path();
+        let mut state = if path.is_file() {
+            match state::read(&path) {
+                Ok(saved) => saved,
+                Err(detail) => return Response::fail(409, detail),
+            }
+        } else {
+            return Response::fail(400, "磁盘上还没有状态文件，没节点可测");
+        };
+
+        let names: Vec<String> = if req.body.is_empty() {
+            vec![]
+        } else {
+            match serde_json::from_slice::<serde_json::Value>(req.body) {
+                Ok(v) => v
+                    .get("nodes")
+                    .and_then(|arr| arr.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                Err(e) => return Response::fail(400, format!("请求体不是合法 JSON：{e}")),
+            }
+        };
+
+        let targets: Vec<&mut crate::model::node::Node> = if names.is_empty() {
+            state.nodes.iter_mut().collect()
+        } else {
+            state
+                .nodes
+                .iter_mut()
+                .filter(|n| names.contains(&n.name))
+                .collect()
+        };
+
+        let mut results = Vec::new();
+        for node in targets {
+            let delay = ping_node(&node.server, node.port);
+            node.delay_ms = delay;
+            results.push(json!({
+                "name": node.name,
+                "delay_ms": delay,
+            }));
+        }
+
+        if let Err(e) = state::write(&path, &state) {
+            return Response::fail(500, format!("测速结果写不回磁盘：{e}"));
+        }
+
+        Response::ok(json!({
+            "pinged": results.len(),
+            "results": results,
+        }))
     }
 
     /// `GET /api/status`：现场读数 + 修订历史 + 本机网卡形状。读数取不到的一律 `null`，
@@ -1971,6 +2033,35 @@ fn verb(method: Method) -> &'static str {
         Method::Put => "PUT",
         Method::Post => "POST",
     }
+}
+
+/// 对指定 server:port 做 TCP 连接测速。返回延迟毫秒数，失败返回 None。
+/// 用 TCP 而不是 ICMP 是因为：节点通常是代理服务器，ICMP 可能被禁，而 TCP 连接
+/// 能反映真实的可用性（端口开放、防火墙放行）。
+fn ping_node(server: &str, port: u16) -> Option<u32> {
+    use std::net::{SocketAddr, ToSocketAddrs};
+    use std::time::{Duration, Instant};
+
+    let addr_str = format!("{server}:{port}");
+    let addrs: Vec<SocketAddr> = match addr_str.to_socket_addrs() {
+        Ok(iter) => iter.collect(),
+        Err(_) => return None,
+    };
+    if addrs.is_empty() {
+        return None;
+    }
+
+    let start = Instant::now();
+    for addr in addrs {
+        match std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(3)) {
+            Ok(_) => {
+                let elapsed = start.elapsed();
+                return Some(elapsed.as_millis() as u32);
+            }
+            Err(_) => continue,
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -3662,6 +3753,7 @@ mod tests {
                 transport: Transport::Tcp,
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         };
         let text = serde_json::to_string(&node).expect("节点序列化成词");
         assert!(
@@ -4663,6 +4755,7 @@ mod tests {
                 transport: Transport::Tcp,
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         });
         state.groups.push(Group {
             tag: "auto".into(),
@@ -4958,6 +5051,7 @@ mod tests {
                 transport: Transport::Tcp,
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         });
         // 模型认这个名字（合法的标识符），dae 不认：它跟内置出站 `direct` 重名
         state.groups.push(Group {
@@ -5457,6 +5551,7 @@ mod tests {
                 transport: Transport::Tcp,
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         });
         state.groups.push(Group {
             tag: "1HK".into(),
@@ -5514,6 +5609,7 @@ mod tests {
                 transport: Transport::Tcp,
                 tls: Tls::Disabled,
             },
+            delay_ms: None,
         });
         state.groups.push(Group {
             tag: "1HK".into(),

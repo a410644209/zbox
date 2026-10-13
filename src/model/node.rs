@@ -8,6 +8,9 @@ pub struct Node {
     pub server: String,
     pub port: u16,
     pub kind: NodeKind,
+    /// 测速延迟（毫秒），None 表示未测速或测速失败
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delay_ms: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

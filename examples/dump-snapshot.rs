@@ -12,7 +12,7 @@ use zboxd::model::config::{
     builtin_rule_sets, DesiredState, DomainAction, DomainPattern, DomainRule, FinalOutbound, Group,
     GroupKind, RuleSet, Upstream, UpstreamTransport, Via,
 };
-use zboxd::model::device::{Device, DeviceMode};
+use zboxd::model::device::{Device, DeviceMode, IpType};
 use zboxd::model::node::{
     Node, NodeKind, QuicProtocol, Reality, StreamProtocol, Tls, TlsConfig, Transport,
 };
@@ -49,7 +49,7 @@ fn main() {
         },
     };
     if let Err(e) = state.validate() {
-        eprintln!("state invalid: {e}");
+        eprintln!("state invalid: {e:?}");
         process::exit(1);
     }
     let files = match snapshot_files(&state) {
@@ -101,6 +101,7 @@ fn full_state() -> DesiredState {
                     ..Default::default()
                 }),
             },
+            delay_ms: None,
         },
         Node {
             name: "vless-ws".into(),
@@ -123,6 +124,7 @@ fn full_state() -> DesiredState {
                     ..Default::default()
                 }),
             },
+            delay_ms: None,
         },
         Node {
             name: "hy2".into(),
@@ -143,6 +145,7 @@ fn full_state() -> DesiredState {
                     }),
                 },
             },
+            delay_ms: None,
         },
         Node {
             name: "tuic".into(),
@@ -164,6 +167,7 @@ fn full_state() -> DesiredState {
                     }),
                 },
             },
+            delay_ms: None,
         },
     ];
 
@@ -226,12 +230,16 @@ fn full_state() -> DesiredState {
             mac: Some("aa:bb:cc:dd:ee:01".into()),
             hostname: Some("printer".into()),
             mode: DeviceMode::Bypass,
+            ip_type: IpType::Dhcp,
+            display_name: None,
         },
         Device {
             ip: "192.168.219.60".into(),
             mac: None,
             hostname: Some("tv".into()),
             mode: DeviceMode::Direct,
+            ip_type: IpType::Dhcp,
+            display_name: None,
         },
     ];
 
@@ -260,6 +268,8 @@ fn netns_state(fakeip: bool) -> DesiredState {
         mac: None,
         hostname: Some("bypass-client".into()),
         mode: DeviceMode::Bypass,
+        ip_type: IpType::Dhcp,
+        display_name: None,
     }];
     state
 }

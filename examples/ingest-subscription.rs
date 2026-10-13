@@ -76,7 +76,7 @@ fn main() {
     state.rule_sets = builtin_rule_sets();
 
     if let Err(e) = state.validate() {
-        eprintln!("validate failed: {e}");
+        eprintln!("validate failed: {e:?}");
         process::exit(1);
     }
     let files = match snapshot_files(&state) {
