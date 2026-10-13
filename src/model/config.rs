@@ -52,6 +52,24 @@ pub struct DesiredState {
     /// 未过之前，用户可以在面板上退回 restart 并要求"每次改都掐一次连接"这个可见代价。
     #[serde(default)]
     pub apply_policy: ApplyPolicy,
+    /// 订阅的元信息：到期时间、流量配额。从机场响应头或 info 条目解析而来，
+    /// 面板「订阅与节点」那一屏要显示它。None = 还没导入过订阅。
+    #[serde(default)]
+    pub subscription_meta: Option<SubscriptionMeta>,
+}
+
+/// 订阅的元信息：机场通过响应头或 info 条目传递的到期时间、流量配额。
+///
+/// 时间戳是 Unix 秒（UTC 00:00:00），流量是字节数。None = 机场没给这一项。
+/// 面板上"套餐到期：2027-01-14"和"剩余流量：1016.75 GB"从这两个字段算出来。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SubscriptionMeta {
+    /// 套餐到期时间（Unix 时间戳，秒）
+    pub expire: Option<i64>,
+    /// 总流量配额（字节）
+    pub total: Option<i64>,
+    /// 已用流量（字节）
+    pub used: Option<i64>,
 }
 
 /// 下发节奏。两条都有代价，所以做成明写的一格而不是藏在生成器里。
@@ -696,6 +714,7 @@ impl DesiredState {
             network: Network::default(),
             ports: Ports::default(),
             apply_policy: ApplyPolicy::default(),
+            subscription_meta: None,
         }
     }
 
@@ -1255,6 +1274,8 @@ mod tests {
             mac: None,
             hostname: Some("电视".into()),
             mode: DeviceMode::Direct,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         }];
 
         let got = state.validate().unwrap_err();
@@ -1287,12 +1308,16 @@ mod tests {
                 mac: None,
                 hostname: None,
                 mode: DeviceMode::Global,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
             Device {
                 ip: "tv.lan".into(),
                 mac: None,
                 hostname: None,
                 mode: DeviceMode::Proxy,
+                ip_type: crate::model::device::IpType::Dhcp,
+                display_name: None,
             },
         ];
         let got = state.validate().unwrap_err();
@@ -1629,6 +1654,8 @@ mod tests {
             mac: None,
             hostname: Some("电视".into()),
             mode: DeviceMode::Bypass,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         }];
         s.validate().unwrap();
 
@@ -1638,6 +1665,8 @@ mod tests {
             mac: None,
             hostname: None,
             mode: DeviceMode::Bypass,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         });
         s.validate().unwrap();
 
@@ -1663,6 +1692,8 @@ mod tests {
             mac: Some("aa:bb:cc:dd:ee:ff".into()),
             hostname: None,
             mode: DeviceMode::Global,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         });
         assert!(problems(&s).contains("aa:bb:cc:dd:ee:ff"));
     }

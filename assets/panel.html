@@ -25,8 +25,7 @@
 <p class="nav-group">照着做</p>
 <button class="nav-item" type="button" data-view="connect" data-tier="basic"><span class="mark">连</span><span class="label">连接与令牌</span></button>
 <button class="nav-item" type="button" data-view="nodes" data-tier="basic"><span class="mark">订</span><span class="label">订阅与节点</span></button>
-<button class="nav-item" type="button" data-view="policy" data-tier="basic"><span class="mark">默</span><span class="label">默认怎么走</span></button>
-<button class="nav-item" type="button" data-view="devices" data-tier="basic"><span class="mark">某</span><span class="label">某台设备单独走</span></button>
+<button class="nav-item" type="button" data-view="routing" data-tier="basic"><span class="mark">走</span><span class="label">流量怎么走</span></button>
 <button class="nav-item" type="button" data-view="deploy" data-tier="basic"><span class="mark">让</span><span class="label">让它生效</span></button>
 
 <p class="nav-group">现在怎么样</p>
@@ -84,24 +83,24 @@
 
 <div class="card">
 <h2>这条路怎么走</h2>
-<p class="note">侧栏顶上那组「照着做」五屏是全部必经的几步，按顺序走一遍就通；中间那组
+<p class="note">侧栏顶上那组「照着做」四屏是全部必经的几步，按顺序走一遍就通；中间那组
 「现在怎么样」三屏只看不改，随时可以回来看。剩下那些要动规则本身的屏才住在侧栏底部那个
 「开启高级模式」后面——不去改规则本身，就不用碰它们。</p>
 <dl>
 <dt>① 连接与令牌</dt><dd>就是这一屏：把机器上取到的令牌贴进来，连上这台 ZBox。</dd>
 <dt>② 订阅与节点</dt><dd>告诉 ZBox 有哪些出口可走：有机场订阅链接就贴进来按「导入订阅」，自己搭的出口用下面那三个「加一条」按钮。</dd>
-<dt>③ 默认怎么走</dt><dd>这一屏顶上是一排三颗钮：<strong>「不科学」</strong>（全部直连）、
-<strong>「智能分流」</strong>（大陆直连，其余走代理）、<strong>「全局」</strong>（所有域名都走代理）。
-要科学上网就按<strong>「智能分流」</strong>那一颗——上一屏贴订阅按「导入订阅」时 ZBox 会顺手把它设好，
-没订阅或想改主意就在这儿按。新机器出厂是第一颗「不科学」，那一档装上也不断网。</dd>
-<dt>④ 某台设备单独走</dt><dd>只让局域网里某一台不跟着默认走；不需要就跳过这一屏。</dd>
-<dt>⑤ 让它生效</dt><dd>把前四屏写下来的那一份<strong>交给数据面</strong>：按这一屏的
+<dt> 流量怎么走</dt><dd>这一屏分上下两截：上面三颗钮定默认档（<strong>「不科学」</strong>全部直连、
+<strong>「智能分流」</strong>大陆直连其余走代理、<strong>「全局」</strong>所有域名走代理），
+下面三栏把局域网里的设备拖进想要的那一档——拖进哪栏就走哪档，不拖就跟着上面那排默认走。
+要科学上网就按「智能分流」那一颗，再把自己不想走代理的设备（电视、打印机）拖进「不科学」栏。
+新机器出厂是第一颗「不科学」，那一档装上也不断网。</dd>
+<dt>④ 让它生效</dt><dd>把前三屏写下来的那一份<strong>交给数据面</strong>：按这一屏的
 「显式下发当前期望状态」；要退回时也从这一屏的清单里挑一份回来。
 会掐断连接的那几步（下发、回滚、开关劫持）都在这一屏，没有一个藏在别的按钮后面。</dd>
 </dl>
 <p class="note"><strong>「保存到磁盘」不在哪一屏里面</strong>：它一直挂在页面<strong>顶上那一排</strong>，
 上面任何一格改完都要按它一次才写下来（旁边那颗「放弃改动，重读磁盘」是反悔用的）。
-<strong>保存也不等于下发</strong>：保存只写 <code>state.json</code>，数据面要等第⑤屏，
+<strong>保存也不等于下发</strong>：保存只写 <code>state.json</code>，数据面要等第④屏，
 而下发会把在用连接掐断一次。</p>
 <p class="note">还剩机器那一侧的一步：要用的人把 <strong>DNS 或网关改成这台 ZBox 的地址</strong>，
 流量才会经过这里。</p>
@@ -202,17 +201,100 @@
 
 <div id="editor" hidden>
 
-<section class="page" data-view="policy">
+<section class="page" data-view="routing">
 <div class="card">
-<h2>分流策略</h2>
+<h2>流量怎么走</h2>
+<p class="note"><strong>上面一排定默认，下面三栏定每台设备</strong>：上面三颗钮选哪一颗，
+没被拖到下面任何一栏的设备就走哪一档；拖进哪栏就走哪档，不受上面那排影响。</p>
+
+<!-- 默认档三颗钮 -->
 <p class="note"><strong>先点下面这一排就够了</strong>：它改的是背后那两格（中国大陆那条直连、
 和没命中任何规则时走哪），改完那两格还是能在下面单独拧。</p>
-<div id="mode-switch" class="mode-switch" role="group" aria-label="默认怎么走">
+<div id="mode-switch" class="mode-switch" role="group" aria-label="默认档">
 <button type="button" class="mode-opt" data-mode="direct">不科学<span>全部直连</span></button>
 <button type="button" class="mode-opt" data-mode="smart">智能分流<span>大陆直连，其余走代理</span></button>
 <button type="button" class="mode-opt" data-mode="global">全局<span>所有域名都走代理</span></button>
 </div>
 <p class="note" id="mode-switch-note"></p>
+
+<!-- ZBox 本机卡片 -->
+<div class="zbox-card">
+<div class="zbox-icon">Z</div>
+<div class="zbox-info">
+<div class="zbox-name">ZBox</div>
+<div class="zbox-ip" id="zbox-ip">—</div>
+</div>
+</div>
+
+<!-- 搜索栏 -->
+<div class="device-search">
+<input id="device-search-input" type="text" placeholder="输入 MAC 地址定位设备（如 aa:bb:cc:dd:ee:ff）" autocomplete="off" spellcheck="false">
+<button id="device-search-clear" class="mini" type="button" hidden>清除</button>
+</div>
+
+<!-- 三栏拖拽区 -->
+<div class="routing-lanes">
+<div class="lane" data-mode="direct">
+<div class="lane-header">
+<h3>直连</h3>
+<span class="lane-count" id="lane-direct-count">0 台</span>
+</div>
+<p class="lane-note">所有域名都直连，一个都不走代理。适合电视、打印机、IoT。</p>
+<ul id="lane-direct" class="lane-cards"></ul>
+</div>
+
+<div class="lane" data-mode="smart">
+<div class="lane-header">
+<h3>智能分流</h3>
+<span class="lane-count" id="lane-smart-count">0 台</span>
+</div>
+<p class="lane-note">大陆直连，其余走代理。跟着上面那排默认走。</p>
+<ul id="lane-smart" class="lane-cards"></ul>
+</div>
+
+<div class="lane" data-mode="global">
+<div class="lane-header">
+<h3>全局</h3>
+<span class="lane-count" id="lane-global-count">0 台</span>
+</div>
+<p class="lane-note">所有域名都走代理，走的是兜底出口指向的策略组。</p>
+<ul id="lane-global" class="lane-cards"></ul>
+</div>
+</div>
+
+<p class="note" id="device-empty">还没有设备：局域网里的每一台都跟着上面那排默认走。</p>
+
+<div class="actions">
+<button id="add-device" class="mini" type="button">加一台设备</button>
+<button id="select-all" class="mini" type="button">全选</button>
+<button id="clear-selection" class="mini" type="button">清除选择</button>
+</div>
+
+<p class="note">点一张卡选中，按住拖动到另一栏改档；也可以先选多张再一起拖。
+卡片上直接改备注名，点进去能改 IP 分配方式（DHCP / 静态）和 MAC 地址。</p>
+
+<!-- 域名名单（高级档） -->
+<div id="domain-rules-section" hidden>
+<div class="card">
+<h2>域名名单</h2>
+<p class="note"><strong>顺序即优先级</strong>：第一条命中的生效，排在后面的规则不再被看到。
+写法沿用名单那套：<code>example.com</code> 精确、<code>+example.com</code> 或 <code>.example.com</code> 后缀、
+<code>~example</code> 关键词、<code>/正则/</code> 正则。要让某条赢过别的规则，把它<em>往上</em>移。</p>
+<ul id="rule-list" class="rules"></ul>
+<p class="note" id="rule-empty">名单目前是空的。</p>
+<div class="rule-row">
+<input id="new-rule-pattern" type="text" placeholder="+example.com" autocomplete="off" spellcheck="false">
+<select id="new-rule-action">
+<option value="direct">直连</option>
+<option value="proxy">代理</option>
+<option value="block">拦截</option>
+</select>
+<button id="add-rule" class="mini" type="button">加到末尾</button>
+</div>
+</div>
+
+<div class="card">
+<h2>分流策略细节</h2>
 <p class="note">这一排只管那两格。<strong>私网直连、广告拦截、BT 直连那三格各管各的</strong>，
 不跟着它动。</p>
 <label class="check"><input id="pol-private-direct" type="checkbox"><span>私网 / 回环 / 组播地址直连</span></label>
@@ -232,25 +314,63 @@
 <p class="note">得是这份状态里已经存在的策略组 tag：保存这一关就会验，不存在的组直接 400 退回。</p>
 </div>
 </div>
-
-<div class="card">
-<h2>域名名单</h2>
-<p class="note"><strong>顺序即优先级</strong>：第一条命中的生效，排在后面的规则不再被看到。
-写法沿用名单那套：<code>example.com</code> 精确、<code>+example.com</code> 或 <code>.example.com</code> 后缀、
-<code>~example</code> 关键词、<code>/正则/</code> 正则。要让某条赢过别的规则，把它<em>往上</em>移。</p>
-<ul id="rule-list" class="rules"></ul>
-<p class="note" id="rule-empty">名单目前是空的。</p>
-<div class="rule-row">
-<input id="new-rule-pattern" type="text" placeholder="+example.com" autocomplete="off" spellcheck="false">
-<select id="new-rule-action">
-<option value="direct">直连</option>
-<option value="proxy">代理</option>
-<option value="block">拦截</option>
-</select>
-<button id="add-rule" class="mini" type="button">加到末尾</button>
 </div>
 </div>
 </section>
+
+<!-- 设备详情弹窗 -->
+<div id="device-modal" class="modal" hidden>
+<div class="modal-content">
+<h3>设备详情</h3>
+<div class="field">
+<label for="modal-device-ip">IP 地址</label>
+<input id="modal-device-ip" type="text" readonly>
+</div>
+<div class="field">
+<label for="modal-device-mac">MAC 地址</label>
+<input id="modal-device-mac" type="text" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="modal-device-name">备注名</label>
+<input id="modal-device-name" type="text" placeholder="留空则显示 IP 最后一段" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label>IP 分配方式</label>
+<div class="radio-group">
+<label class="radio"><input type="radio" name="modal-ip-type" value="dhcp" checked><span>DHCP 自动分配</span></label>
+<label class="radio"><input type="radio" name="modal-ip-type" value="static"><span>静态 IP</span></label>
+</div>
+</div>
+<div class="modal-actions">
+<button id="modal-device-save" class="mini" type="button">保存</button>
+<button id="modal-device-cancel" class="mini" type="button">取消</button>
+<button id="modal-device-delete" class="mini danger" type="button">删除</button>
+</div>
+</div>
+</div>
+
+<!-- 添加设备弹窗 -->
+<div id="add-device-modal" class="modal" hidden>
+<div class="modal-content">
+<h3>加一台设备</h3>
+<div class="field">
+<label for="new-device-ip">IP 地址</label>
+<input id="new-device-ip" type="text" placeholder="192.168.2.105" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="new-device-mac">MAC 地址（可留空）</label>
+<input id="new-device-mac" type="text" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+</div>
+<div class="field">
+<label for="new-device-name">备注名（可留空，默认显示 IP 最后一段）</label>
+<input id="new-device-name" type="text" autocomplete="off" spellcheck="false">
+</div>
+<div class="modal-actions">
+<button id="new-device-save" class="mini" type="button">添加</button>
+<button id="new-device-cancel" class="mini" type="button">取消</button>
+</div>
+</div>
+</div>
 
 <section class="page" data-view="dns">
 <div class="card">
@@ -430,53 +550,13 @@ oxidns 那一侧没有"允许哪些客户端"这种开关，监听地址就是�
 </div>
 </section>
 
-<section class="page" data-view="devices">
-<div class="card">
-<h2>某台设备单独走</h2>
-<p class="note">这里回答的是"这一台不一样"。<strong>一栏就是一档</strong>：把那张卡拖进哪一栏，
-这台设备就走哪一档；不想拖的话，卡片上那一档也能直接改选。</p>
-<p class="note"><strong>拖的是"哪一档"，不是"哪一条"</strong>：这几台之间没有先后，谁也不盖谁，
-所以这一屏没有"第 1 台、第 2 台"那种序号。名单里真有先后的是「默认怎么走」那一屏的域名名单。</p>
-<p class="note">这些例外排在域名名单<strong>之前</strong>：一台设了"不科学"，后面那条"大陆域名直连"就盖不到它。</p>
-<div id="device-lanes" class="lanes">
-<div class="lane" data-mode="direct">
-<h3>不科学</h3>
-<p class="lane-count">0 台</p>
-<p class="note">照常经过这台机器，只是所有域名都直连，一个都不走代理。</p>
-<ul id="dev-lane-direct" class="lane-cards"></ul>
+<!-- 旧设备栏（隐藏，仅供 JS 兼容） -->
+<div id="device-lanes" hidden>
+<div class="lane" data-mode="direct"><ul class="lane-cards"></ul></div>
+<div class="lane" data-mode="global"><ul class="lane-cards"></ul></div>
+<div class="lane" data-mode="proxy"><ul class="lane-cards"></ul></div>
+<div class="lane" data-mode="bypass"><ul class="lane-cards"></ul></div>
 </div>
-<div class="lane" data-mode="global">
-<h3>跟着默认走</h3>
-<p class="lane-count">0 台</p>
-<p class="note">这台设备不单独定，跟着「默认怎么走」那一屏的档走——默认那一排设成哪一档，这一栏的设备就走哪一档。</p>
-<ul id="dev-lane-global" class="lane-cards"></ul>
-</div>
-<div class="lane" data-mode="proxy">
-<h3>强制走代理</h3>
-<p class="lane-count">0 台</p>
-<p class="note">这台设备所有域名都强制走代理，走的是「默认怎么走」里兜底出口指向的那个组。
-兜底出口还设成直连时（新装就是这样）保存仍然成功，但生成器会说"没有可去的策略组"，下发被拒——
-那句话在「现在的状态」那一屏读得到。</p>
-<ul id="dev-lane-proxy" class="lane-cards"></ul>
-</div>
-<div class="lane" data-mode="bypass">
-<h3>不接管</h3>
-<p class="lane-count">0 台</p>
-<p class="note">这台设备的流量根本不进这台机器。它和"不科学"的区别就在这一句：
-那一栏还经过本机、只是不走代理，这一栏连接管都不接管。一般留给打印机、另一台路由器，
-或者一台你不想让这个程序碰的机器。</p>
-<ul id="dev-lane-bypass" class="lane-cards"></ul>
-</div>
-</div>
-<p class="note" id="device-empty">还没有设备例外：局域网里的每一台都跟着「默认怎么走」那一屏的档走。</p>
-<div class="actions">
-<button id="add-device" class="mini" type="button">加一台设备</button>
-</div>
-<p class="note" id="device-note">加一台：先填它的地址（一台一个地址，比如 10.99.0.3；
-不要写成 10.99.0.0/24 那种一段的写法，这一段的事归「默认怎么走」），再把它拖进想要的那一栏。
-主机名与 MAC 可以留空——MAC 现在没有任何生成物消费它，主机名只在报错文案里当名字用。</p>
-</div>
-</section>
 
 <section class="page" data-view="groups">
 <div class="card">
@@ -533,7 +613,28 @@ oxidns 那一侧没有"允许哪些客户端"这种开关，监听地址就是�
 <button id="sub-import" class="mini" type="button">导入订阅</button>
 </div>
 <p class="note" id="sub-out">还没有导入过。</p>
-<button id="sub-policy-link" class="mini" type="button" hidden>默认怎么走</button>
+
+<!-- 订阅元信息：剩余流量、重置倒计时、到期时间 -->
+<div id="sub-meta" class="sub-meta-grid" hidden>
+  <div class="sub-meta-item">
+    <span class="sub-meta-label">剩余流量</span>
+    <span class="sub-meta-value" id="sub-meta-remaining">—</span>
+  </div>
+  <div class="sub-meta-item">
+    <span class="sub-meta-label">距离下次重置剩余</span>
+    <span class="sub-meta-value" id="sub-meta-reset">—</span>
+  </div>
+  <div class="sub-meta-item">
+    <span class="sub-meta-label">套餐到期</span>
+    <span class="sub-meta-value" id="sub-meta-expire">—</span>
+  </div>
+</div>
+
+<button id="sub-policy-link" class="mini" type="button" hidden>流量怎么走</button>
+
+<!-- 策略组与节点列表 -->
+<div id="groups-container"></div>
+
 <p class="note">这一屏回答的是"流量从哪儿出去"。一行一个出口：名字自己取（短一点、认得出来），
 再加地址、端口，和这一种自己要的那一条凭据——vless / vmess 是 UUID，
 trojan / shadowsocks / hysteria2 是密码，tuic 两个都要。</p>
@@ -548,12 +649,17 @@ trojan / shadowsocks / hysteria2 是密码，tuic 两个都要。</p>
 <p class="note"><strong>加行只有三档</strong>：VLESS+Reality、Hysteria2、TUIC，就是自建那三种；
 档在加的时候定，已有的行不给换档。<em>新加那一条的凭据必须填全</em>——它没有旧值可留，不填会被退回。
 这三档是给<strong>自己搭的出口</strong>用的；机场那一批出口用上面那个「导入订阅」，不用一条条粘进来。</p>
+
+<!-- 节点编辑区（高级档） -->
+<div id="node-editor" hidden>
 <ul id="node-list" class="upstreams"></ul>
 <p class="note" id="node-empty">这份状态还没有节点：策略组没有成员可选，兜底出口也只能选直连。</p>
 <div class="actions">
 <button id="add-node-vless" class="mini" type="button">加一条 VLESS+Reality</button>
 <button id="add-node-hysteria2" class="mini" type="button">加一条 Hysteria2</button>
 <button id="add-node-tuic" class="mini" type="button">加一条 TUIC</button>
+<button id="ping-all" class="mini" type="button">全部测速</button>
+</div>
 </div>
 </div>
 </section>

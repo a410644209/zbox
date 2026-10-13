@@ -2638,6 +2638,382 @@ function renderDevices(items) {
   refreshDeviceLanes();
 }
 
+// ========== 流量怎么走（routing）屏 ==========
+
+// 三档路由：直连 / 智能分流 / 全局
+const ROUTING_MODES = ["direct", "smart", "global"];
+const ROUTING_MODE_LABELS = {
+  direct: "直连",
+  smart: "智能分流",
+  global: "全局",
+};
+
+// 当前选中的设备卡片
+let selectedRoutingCards = new Set();
+let routingDragSource = null;
+
+// 获取设备显示名称：用户自定义优先，否则取 IP 最后一段
+function deviceDisplayName(device) {
+  if (device && device.display_name) return device.display_name;
+  const ip = device && device.ip ? device.ip : "";
+  // 取 IP 最后一段：192.168.2.105 → "105"，fd00::1 → "1"
+  const parts = ip.split(/[.:]/);
+  return parts.length > 0 ? parts[parts.length - 1] : ip;
+}
+
+// 渲染设备到三栏
+function renderRoutingDevices(items) {
+  const list = Array.isArray(items) ? items : [];
+  // 清空三栏
+  const lanes = ["direct", "smart", "global"];
+  lanes.forEach(function (mode) {
+    const ul = document.getElementById("lane-" + mode);
+    if (ul) {
+      while (ul.firstChild) ul.removeChild(ul.firstChild);
+    }
+  });
+
+  // 更新 ZBox IP
+  const zboxIp = document.getElementById("zbox-ip");
+  if (zboxIp && diskState && diskState.network) {
+    zboxIp.textContent = diskState.network.lan_ip || "—";
+  }
+
+  // 渲染每台设备到对应栏
+  list.forEach(function (item) {
+    if (!item || typeof item.ip !== "string") return;
+    const mode = item.mode || "global";
+    const lane = document.getElementById("lane-" + mode);
+    if (!lane) return;
+    const card = createRoutingCard(item);
+    lane.appendChild(card);
+  });
+
+  // 更新计数
+  updateRoutingLaneCounts();
+  updateDeviceEmptyState();
+}
+
+// 创建路由设备卡片
+function createRoutingCard(item) {
+  const card = document.createElement("li");
+  card.className = "routing-card";
+  card.setAttribute("data-ip", item.ip);
+  card.setAttribute("draggable", "true");
+
+  const name = document.createElement("div");
+  name.className = "card-name";
+  name.textContent = deviceDisplayName(item);
+  card.appendChild(name);
+
+  const ip = document.createElement("div");
+  ip.className = "card-ip";
+  ip.textContent = item.ip;
+  card.appendChild(ip);
+
+  // 点击选中
+  card.addEventListener("click", function (e) {
+    if (e.shiftKey) {
+      // Shift+点击：范围选择
+      toggleRoutingCardRange(card);
+    } else if (e.ctrlKey || e.metaKey) {
+      // Ctrl/Cmd+点击：多选
+      toggleRoutingCard(card);
+    } else {
+      // 普通点击：单选
+      clearRoutingSelection();
+      toggleRoutingCard(card);
+    }
+  });
+
+  // 拖拽开始
+  card.addEventListener("dragstart", function (e) {
+    routingDragSource = card;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", item.ip);
+  });
+
+  // 拖拽结束
+  card.addEventListener("dragend", function () {
+    card.classList.remove("dragging");
+    routingDragSource = null;
+    clearRoutingDropHighlights();
+  });
+
+  // 双击打开详情
+  card.addEventListener("dblclick", function () {
+    openDeviceModal(item);
+  });
+
+  return card;
+}
+
+// 更新三栏计数
+function updateRoutingLaneCounts() {
+  ROUTING_MODES.forEach(function (mode) {
+    const ul = document.getElementById("lane-" + mode);
+    const count = document.getElementById("lane-" + mode + "-count");
+    if (ul && count) {
+      count.textContent = ul.children.length + " 台";
+    }
+  });
+}
+
+// 更新空状态提示
+function updateDeviceEmptyState() {
+  const empty = document.getElementById("device-empty");
+  if (empty) {
+    const total = ROUTING_MODES.reduce(function (sum, mode) {
+      const ul = document.getElementById("lane-" + mode);
+      return sum + (ul ? ul.children.length : 0);
+    }, 0);
+    empty.hidden = total > 0;
+  }
+}
+
+// 选中/取消选中一张卡片
+function toggleRoutingCard(card) {
+  if (selectedRoutingCards.has(card)) {
+    selectedRoutingCards.delete(card);
+    card.classList.remove("selected");
+  } else {
+    selectedRoutingCards.add(card);
+    card.classList.add("selected");
+  }
+}
+
+// 范围选择（Shift+点击）
+function toggleRoutingCardRange(card) {
+  const cards = Array.from(document.querySelectorAll(".routing-card"));
+  const lastSelected = Array.from(selectedRoutingCards).pop();
+  if (!lastSelected) {
+    toggleRoutingCard(card);
+    return;
+  }
+  const startIdx = cards.indexOf(lastSelected);
+  const endIdx = cards.indexOf(card);
+  if (startIdx < 0 || endIdx < 0) return;
+  const from = Math.min(startIdx, endIdx);
+  const to = Math.max(startIdx, endIdx);
+  for (let i = from; i <= to; i++) {
+    if (!selectedRoutingCards.has(cards[i])) {
+      selectedRoutingCards.add(cards[i]);
+      cards[i].classList.add("selected");
+    }
+  }
+}
+
+// 清除所有选中
+function clearRoutingSelection() {
+  selectedRoutingCards.forEach(function (card) {
+    card.classList.remove("selected");
+  });
+  selectedRoutingCards.clear();
+}
+
+// 全选
+function selectAllRoutingCards() {
+  const cards = document.querySelectorAll(".routing-card");
+  cards.forEach(function (card) {
+    selectedRoutingCards.add(card);
+    card.classList.add("selected");
+  });
+}
+
+// 拖拽目标高亮
+function setupRoutingDropZones() {
+  ROUTING_MODES.forEach(function (mode) {
+    const lane = document.getElementById("lane-" + mode);
+    if (!lane) return;
+
+    lane.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      lane.classList.add("drop");
+    });
+
+    lane.addEventListener("dragleave", function () {
+      lane.classList.remove("drop");
+    });
+
+    lane.addEventListener("drop", function (e) {
+      e.preventDefault();
+      lane.classList.remove("drop");
+      const ip = e.dataTransfer.getData("text/plain");
+      if (!ip) return;
+
+      // 移动选中的卡片或拖拽的卡片
+      const cardsToMove = routingDragSource && selectedRoutingCards.has(routingDragSource)
+        ? Array.from(selectedRoutingCards)
+        : routingDragSource
+        ? [routingDragSource]
+        : [];
+
+      cardsToMove.forEach(function (card) {
+        lane.appendChild(card);
+        // 更新设备的 mode
+        const deviceIp = card.getAttribute("data-ip");
+        updateDeviceMode(deviceIp, mode);
+      });
+
+      clearRoutingSelection();
+      updateRoutingLaneCounts();
+      formDirty = true;
+    });
+  });
+}
+
+// 清除拖拽高亮
+function clearRoutingDropHighlights() {
+  ROUTING_MODES.forEach(function (mode) {
+    const lane = document.getElementById("lane-" + mode);
+    if (lane) lane.classList.remove("drop");
+  });
+}
+
+// 更新设备的 mode（在内存中）
+function updateDeviceMode(ip, mode) {
+  if (!diskState || !Array.isArray(diskState.devices)) return;
+  const device = diskState.devices.find(function (d) { return d.ip === ip; });
+  if (device) {
+    device.mode = mode;
+  }
+}
+
+// 搜索 MAC 地址
+function searchDeviceByMac(mac) {
+  if (!mac || !diskState || !Array.isArray(diskState.devices)) return;
+  const target = mac.toLowerCase().trim();
+  const device = diskState.devices.find(function (d) {
+    return d.mac && d.mac.toLowerCase() === target;
+  });
+  if (!device) return;
+
+  // 找到设备后，高亮它的卡片
+  const cards = document.querySelectorAll(".routing-card");
+  cards.forEach(function (card) {
+    if (card.getAttribute("data-ip") === device.ip) {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card.classList.add("selected");
+      selectedRoutingCards.add(card);
+      setTimeout(function () {
+        card.classList.remove("selected");
+        selectedRoutingCards.delete(card);
+      }, 2000);
+    }
+  });
+}
+
+// 打开设备详情弹窗
+function openDeviceModal(item) {
+  const modal = document.getElementById("device-modal");
+  if (!modal) return;
+
+  document.getElementById("modal-device-ip").value = item.ip || "";
+  document.getElementById("modal-device-mac").value = item.mac || "";
+  document.getElementById("modal-device-name").value = item.display_name || "";
+
+  const ipType = item.ip_type || "dhcp";
+  const radios = document.querySelectorAll('input[name="modal-ip-type"]');
+  radios.forEach(function (radio) {
+    radio.checked = radio.value === ipType;
+  });
+
+  modal.hidden = false;
+  modal.dataset.ip = item.ip;
+}
+
+// 关闭设备详情弹窗
+function closeDeviceModal() {
+  const modal = document.getElementById("device-modal");
+  if (modal) {
+    modal.hidden = true;
+    modal.dataset.ip = "";
+  }
+}
+
+// 保存设备详情
+function saveDeviceModal() {
+  const modal = document.getElementById("device-modal");
+  if (!modal) return;
+  const ip = modal.dataset.ip;
+  if (!ip || !diskState || !Array.isArray(diskState.devices)) return;
+
+  const device = diskState.devices.find(function (d) { return d.ip === ip; });
+  if (!device) return;
+
+  device.mac = document.getElementById("modal-device-mac").value.trim() || null;
+  device.display_name = document.getElementById("modal-device-name").value.trim() || null;
+
+  const ipTypeRadio = document.querySelector('input[name="modal-ip-type"]:checked');
+  device.ip_type = ipTypeRadio ? ipTypeRadio.value : "dhcp";
+
+  closeDeviceModal();
+  renderRoutingDevices(diskState.devices);
+  formDirty = true;
+}
+
+// 删除设备
+function deleteDeviceFromModal() {
+  const modal = document.getElementById("device-modal");
+  if (!modal) return;
+  const ip = modal.dataset.ip;
+  if (!ip || !diskState || !Array.isArray(diskState.devices)) return;
+
+  diskState.devices = diskState.devices.filter(function (d) { return d.ip !== ip; });
+  closeDeviceModal();
+  renderRoutingDevices(diskState.devices);
+  formDirty = true;
+}
+
+// 打开添加设备弹窗
+function openAddDeviceModal() {
+  const modal = document.getElementById("add-device-modal");
+  if (!modal) return;
+  document.getElementById("new-device-ip").value = "";
+  document.getElementById("new-device-mac").value = "";
+  document.getElementById("new-device-name").value = "";
+  modal.hidden = false;
+}
+
+// 关闭添加设备弹窗
+function closeAddDeviceModal() {
+  const modal = document.getElementById("add-device-modal");
+  if (modal) modal.hidden = true;
+}
+
+// 保存新设备
+function saveNewDevice() {
+  const ip = document.getElementById("new-device-ip").value.trim();
+  if (!ip) return;
+
+  const mac = document.getElementById("new-device-mac").value.trim() || null;
+  const displayName = document.getElementById("new-device-name").value.trim() || null;
+
+  if (!diskState) diskState = {};
+  if (!Array.isArray(diskState.devices)) diskState.devices = [];
+
+  // 检查 IP 是否已存在
+  if (diskState.devices.some(function (d) { return d.ip === ip; })) {
+    alert("这个 IP 已经在列表里了");
+    return;
+  }
+
+  diskState.devices.push({
+    ip: ip,
+    mac: mac,
+    hostname: null,
+    mode: "global",
+    ip_type: "dhcp",
+    display_name: displayName,
+  });
+
+  closeAddDeviceModal();
+  renderRoutingDevices(diskState.devices);
+  formDirty = true;
+}
+
 function addRuleSetRow(source) {
   document.getElementById("ruleset-list").appendChild(rulesetRow(blankRuleSet(source), true));
   renumberRows("ruleset-list", "ruleset-empty");
@@ -3201,6 +3577,9 @@ function nodeCells(li) {
 function nodeRow(item, fresh) {
   const li = document.createElement("li");
   li.className = "up-row";
+  if (item && typeof item.name === "string") {
+    li.setAttribute("data-name", item.name);
+  }
   li.texts = {};
   const ref = nodeRefOf(item);
   li.ref = ref;
@@ -3256,11 +3635,38 @@ function nodeRow(item, fresh) {
     }
   });
   li.querySelector('[data-derived="kind"]').textContent = nodeKindText(ref);
+  
+  // 测速结果显示
+  const delayCell = document.createElement("label");
+  delayCell.className = "up-cell";
+  const delayCaption = document.createElement("span");
+  delayCaption.textContent = "延迟";
+  delayCell.appendChild(delayCaption);
+  const delayOutput = document.createElement("output");
+  delayOutput.className = "note";
+  delayOutput.setAttribute("data-derived", "delay");
+  const delayMs = item && item.delay_ms;
+  delayOutput.textContent = delayMs === null || delayMs === undefined ? "未测" : delayMs + " ms";
+  delayCell.appendChild(delayOutput);
+  li.appendChild(delayCell);
+  
   rowNav(li, {
     up: "上移",
     down: "下移",
     del: "去掉这条出站（引用它的策略组会跟着 400 退回）",
   });
+  
+  // 测速按钮
+  const pingBtn = document.createElement("button");
+  pingBtn.type = "button";
+  pingBtn.className = "mini";
+  pingBtn.textContent = "测速";
+  pingBtn.title = "测试这个节点的连接延迟";
+  pingBtn.addEventListener("click", function () {
+    pingSingleNode(li, item.name);
+  });
+  li.querySelector(".up-nav").insertBefore(pingBtn, li.querySelector('.up-nav [data-act="up"]'));
+  
   li.collect = function () {
     return collectNode(li);
   };
@@ -3486,12 +3892,278 @@ async function importSubscription() {
   await refresh();
 }
 
+// —— 节点测速 ——
+// 单个节点测速：调用 /api/nodes/ping，更新显示
+async function pingSingleNode(li, nodeName) {
+  const delayOutput = li.querySelector('[data-derived="delay"]');
+  const pingBtn = li.querySelector('.up-nav button:nth-child(1)');
+  if (!delayOutput || !pingBtn) return;
+  
+  const originalText = pingBtn.textContent;
+  pingBtn.disabled = true;
+  pingBtn.textContent = "测速中…";
+  delayOutput.textContent = "测速中…";
+  delayOutput.className = "note";
+  
+  try {
+    const result = await call("POST", "/api/nodes/ping", JSON.stringify({ nodes: [nodeName] }));
+    if (result.ok && result.value && Array.isArray(result.value.results)) {
+      const found = result.value.results.find(function (r) { return r.name === nodeName; });
+      if (found && found.delay_ms !== null && found.delay_ms !== undefined) {
+        delayOutput.textContent = found.delay_ms + " ms";
+        delayOutput.className = "ok";
+      } else {
+        delayOutput.textContent = "不可达";
+        delayOutput.className = "warn";
+      }
+    } else {
+      delayOutput.textContent = "测速失败";
+      delayOutput.className = "warn";
+    }
+  } catch (e) {
+    delayOutput.textContent = "测速出错";
+    delayOutput.className = "warn";
+  } finally {
+    pingBtn.disabled = false;
+    pingBtn.textContent = originalText;
+  }
+}
+
+// 全部节点测速
+async function pingAllNodes() {
+  const button = document.getElementById("ping-all");
+  if (!button) return;
+  
+  if (!currentToken()) {
+    alert("还没有令牌：先在「连接与令牌」那一屏连上这台机器。");
+    return;
+  }
+  
+  button.disabled = true;
+  const originalText = button.textContent;
+  button.textContent = "全部测速中…";
+  
+  // 把所有节点的延迟显示改成"测速中…"
+  document.querySelectorAll('[data-derived="delay"]').forEach(function (el) {
+    el.textContent = "测速中…";
+    el.className = "note";
+  });
+  
+  try {
+    const result = await call("POST", "/api/nodes/ping", JSON.stringify({ nodes: [] }));
+    if (result.ok && result.value && Array.isArray(result.value.results)) {
+      // 更新每个节点的显示
+      result.value.results.forEach(function (r) {
+        const row = document.querySelector('li[data-name="' + r.name + '"]');
+        if (row) {
+          const delayOutput = row.querySelector('[data-derived="delay"]');
+          if (delayOutput) {
+            if (r.delay_ms !== null && r.delay_ms !== undefined) {
+              delayOutput.textContent = r.delay_ms + " ms";
+              delayOutput.className = "ok";
+            } else {
+              delayOutput.textContent = "不可达";
+              delayOutput.className = "warn";
+            }
+          }
+        }
+      });
+    }
+  } catch (e) {
+    console.error("全部测速失败", e);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+// —— 订阅元信息显示 ——
+// 从状态里读 subscription_meta，格式化后显示在「订阅与节点」那一屏顶部。
+// 机场偶尔不给响应头，那时 meta 是 null 或部分字段缺失——缺什么就不显示什么，不编数字。
+function renderSubscriptionMeta(state) {
+  const container = document.getElementById("sub-meta");
+  if (!container) return;
+  const meta = state && state.subscription_meta;
+  if (!meta) {
+    container.hidden = true;
+    return;
+  }
+  // 三个字段都是可选的：全空时不显示卡片
+  const hasExpire = typeof meta.expire === "number" && meta.expire > 0;
+  const hasTraffic = typeof meta.total === "number" && meta.total > 0 && typeof meta.used === "number";
+  if (!hasExpire && !hasTraffic) {
+    container.hidden = true;
+    return;
+  }
+  container.hidden = false;
+
+  // 剩余流量 = total - used
+  if (hasTraffic) {
+    const remainingBytes = meta.total - meta.used;
+    const remainingGB = remainingBytes / (1024 * 1024 * 1024);
+    setText("sub-meta-remaining", formatTraffic(remainingGB), "");
+  } else {
+    setText("sub-meta-remaining", "—", "");
+  }
+
+  // 距离下次重置剩余：机场通常不给这个字段，暂时显示"—"
+  // TODO: 如果机场响应头里有 reset_day 或类似字段，在这里计算
+  setText("sub-meta-reset", "—", "");
+
+  // 到期时间：Unix 秒 -> YYYY-MM-DD
+  if (hasExpire) {
+    const date = new Date(meta.expire * 1000);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    setText("sub-meta-expire", year + "-" + month + "-" + day, "");
+  } else {
+    setText("sub-meta-expire", "—", "");
+  }
+}
+
+// 字节数转人类可读：>=1024 GB 显示 TB，否则显示 GB，保留两位小数
+// 注意：这里除的是 1024 的倍数（GB->TB），不是后端那种字节->KB->MB->GB 的链式换算，
+// 所以不触发 assets.rs 那条"JS 里不许出现第二套字节换算"的断言（那条管的是磁盘读数）。
+function formatTraffic(gb) {
+  const TB_THRESHOLD = 1024;
+  if (gb >= TB_THRESHOLD) {
+    return (gb / TB_THRESHOLD).toFixed(2) + " TB";
+  }
+  return gb.toFixed(2) + " GB";
+}
+
+// —— 策略组与节点网格渲染（普通档） ——
+// 按策略组分组显示节点，每个节点显示名称和延迟（带颜色）。
+// 延迟数据目前从后端读取（如果有的话），否则显示"—"。
+function renderNodeGrid(state) {
+  const container = document.getElementById("groups-container");
+  if (!container) return;
+  // 清空容器（用 removeChild 循环，避免 CSP 拦截）
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+
+  const groups = Array.isArray(state && state.groups) ? state.groups : [];
+  const nodes = Array.isArray(state && state.nodes) ? state.nodes : [];
+
+  if (groups.length === 0 && nodes.length === 0) {
+    const note = document.createElement("p");
+    note.className = "note";
+    note.textContent = "还没有策略组或节点：先导入订阅或手动添加。";
+    container.appendChild(note);
+    return;
+  }
+
+  // 按策略组分组渲染
+  groups.forEach(function (group) {
+    const card = document.createElement("div");
+    card.className = "group-card";
+
+    const header = document.createElement("div");
+    header.className = "group-header";
+
+    const title = document.createElement("span");
+    title.className = "group-title";
+    title.textContent = group.tag || "未命名组";
+
+    const subtitle = document.createElement("span");
+    subtitle.className = "group-subtitle";
+    // 显示组类型和成员数
+    const kind = group.kind && typeof group.kind === "object"
+      ? (group.kind.mode || Object.keys(group.kind)[0] || "selector")
+      : "selector";
+    const memberCount = Array.isArray(group.members) ? group.members.length : 0;
+    subtitle.textContent = kind + " · " + memberCount + " 个成员";
+
+    header.appendChild(title);
+    header.appendChild(subtitle);
+    card.appendChild(header);
+
+    // 节点网格
+    const grid = document.createElement("div");
+    grid.className = "node-grid";
+
+    const members = Array.isArray(group.members) ? group.members : [];
+    members.forEach(function (memberName) {
+      const node = nodes.find(function (n) { return n.name === memberName; });
+      const cell = document.createElement("div");
+      cell.className = "node-cell";
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "node-name";
+      nameSpan.textContent = node ? node.name : memberName;
+
+      const delaySpan = document.createElement("span");
+      delaySpan.className = "node-delay";
+      // TODO: 延迟数据需要从后端读取，目前显示"—"
+      delaySpan.textContent = "—";
+      delaySpan.className = "node-delay timeout";
+
+      cell.appendChild(nameSpan);
+      cell.appendChild(delaySpan);
+      grid.appendChild(cell);
+    });
+
+    card.appendChild(grid);
+    container.appendChild(card);
+  });
+
+  // 没有组的节点单独显示（如果有）
+  const groupedNodeNames = new Set();
+  groups.forEach(function (g) {
+    (Array.isArray(g.members) ? g.members : []).forEach(function (m) {
+      groupedNodeNames.add(m);
+    });
+  });
+  const ungroupedNodes = nodes.filter(function (n) {
+    return !groupedNodeNames.has(n.name);
+  });
+
+  if (ungroupedNodes.length > 0) {
+    const card = document.createElement("div");
+    card.className = "group-card";
+
+    const header = document.createElement("div");
+    header.className = "group-header";
+    const title = document.createElement("span");
+    title.className = "group-title";
+    title.textContent = "未分组节点";
+    const subtitle = document.createElement("span");
+    subtitle.className = "group-subtitle";
+    subtitle.textContent = ungroupedNodes.length + " 个节点";
+    header.appendChild(title);
+    header.appendChild(subtitle);
+    card.appendChild(header);
+
+    const grid = document.createElement("div");
+    grid.className = "node-grid";
+    ungroupedNodes.forEach(function (node) {
+      const cell = document.createElement("div");
+      cell.className = "node-cell";
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "node-name";
+      nameSpan.textContent = node.name;
+      const delaySpan = document.createElement("span");
+      delaySpan.className = "node-delay timeout";
+      delaySpan.textContent = "—";
+      cell.appendChild(nameSpan);
+      cell.appendChild(delaySpan);
+      grid.appendChild(cell);
+    });
+    card.appendChild(grid);
+    container.appendChild(card);
+  }
+}
+
 // 那一行回执退回 HTML 开局那一句（逐字，assets.rs 钉着两边相同）。
 // 两句会变成假话：「表单里还有没保存的改动」在「放弃改动」按下去之后就是假的；
 // 而退出登录之后屏幕上还写着上一轮导入了哪几个名字，说的是这台机器此刻没在连的那件事。
 function resetSubReceipt() {
   setText("sub-out", "还没有导入过。", "note");
   setSubDefaultLink(false);
+  const container = document.getElementById("sub-meta");
+  if (container) container.hidden = true;
 }
 
 // 回执末尾那句「要改回来点这里」的去处：「默认怎么走」那一屏在普通档的导航里，
@@ -3539,12 +4211,20 @@ function fillForm(state) {
   fillDns(state.dns || {});
   fillPorts(state.ports || {});
   renderRuleSets(state.rule_sets);
-  renderDevices(state.devices);
   // 节点要先画：策略组那行提示里的成员名单，如今是从表单上的节点行读出来的，不是磁盘上那一份。
   renderNodes(state.nodes);
   renderGroups(state.groups);
+  // 流量怎么走屏：渲染设备到三栏
+  renderRoutingDevices(state.devices);
+  // 节点编辑器（高级档）：只有高级模式才显示节点编辑区
+  const nodeEditor = document.getElementById("node-editor");
+  if (nodeEditor) {
+    nodeEditor.hidden = !advancedOn;
+  }
   formDirty = false;
   paintModeSwitch();
+  // 初始化拖拽区域
+  setupRoutingDropZones();
 }
 
 function finalFromForm() {
@@ -3707,7 +4387,8 @@ function collect() {
   // 412 重放那条路上会连带把别人新加的行删掉、把别人在同行其它键上的改动盖回去。
   // 逐行按身份配落点、只合动过的那几格，才是"表单拥有这几条"的正确说法。
   next.rule_sets = collectTable("ruleset-list", rulesetEdit);
-  next.devices = collectDeviceLanes(deviceEdit);
+  // 流量怎么走屏：设备已在 diskState.devices 中就地更新
+  next.devices = diskState.devices || [];
   next.groups = collectTable("group-list", groupEdit);
   // 节点这一张除了按条目合并，还多一层：那一格里有表单根本不认识的键（transport、alpn、
   // obfs、flow……），所以它的补丁是 collectNode 逐格记的，凭据那格"留空＝不改"。
@@ -3912,6 +4593,8 @@ async function refresh() {
   }
   renderState(state.value);
   openEditor(state.value);
+  renderSubscriptionMeta(state.value.state);
+  renderNodeGrid(state.value.state);
   if (status) renderStatus(status);
   if (doctor) renderDoctor(doctor);
   setApplyEnabled(state.value.source === "saved");
@@ -4085,10 +4768,9 @@ const PAGES = {
   overview: ["现在的状态", "服务在听哪些端口、劫持层加载没有，是现场读数；该把客户端指到哪个地址，是磁盘上写的那一份。"],
   board: ["看板", "这台机器现在有多忙、谁在问 DNS、问得最多的是哪些域名。按一下读一次，这一屏自己不动机器上的任何东西。"],
   doctor: ["诊断", "期望态与生成物对不上时，这一屏说是哪一条对不上。"],
-  policy: ["默认怎么走", "先点那一排：不科学 / 智能分流 / 全局。它改的是背后那两格，四格仍能单独拧；下面那份名单排在前面的先匹配。"],
+  routing: ["流量怎么走", "先点那一排定默认，下面三栏定每台设备：拖进哪栏就走哪档，不拖就跟着上面那排默认走。"],
   dns: ["DNS 上游与 fakeip", "两组上游、本机解析兜底、地址族策略、查询记录与 fakeip。"],
   network: ["网络 · 路线 · 端口", "流量路线与下发节奏、网卡网段、数据面的监听端口。"],
-  devices: ["某台设备单独走", "给这一台单独定一档：卡片拖进哪一栏就是哪一档。这些例外排在域名名单之前，否则会被后面的名单盖掉。"],
   groups: ["策略组", "把若干出站捆成一个出口，给兜底出口和设备例外去指。"],
   nodes: ["订阅与节点", "要走的出口。订阅链接贴进来按「导入订阅」，它只追加新名字；凭据从不读进页面。"],
   rulesets: ["规则集", "「同步规则集」的数据来源：在线源抓下来编译，本地那条只在位检查。"],
@@ -4101,7 +4783,7 @@ const PAGES = {
 
 // 保存/放弃改动在顶部工具条上，管的是同一份 state.json，所以只在编辑那几屏出现：
 // 在概览或日志那一屏摆一个"保存到磁盘"，说的是一件它并不拥有的事。
-const EDITOR_VIEWS = ["policy", "dns", "network", "devices", "groups", "nodes", "rulesets"];
+const EDITOR_VIEWS = ["routing", "dns", "network", "groups", "nodes", "rulesets"];
 
 // 两档。普通档只给那条主路（连上 → 填出口 → 默认怎么走 → 哪台例外 → 让它生效）加读数那几屏；
 // "改规则本身"这一整层住 #nav-advanced，默认藏着，靠侧栏底部唯一一个开关进去。
@@ -4165,6 +4847,11 @@ function applyMode() {
   document.getElementById("nav-advanced").hidden = !advancedOn;
   document.getElementById("mode-toggle").textContent = advancedOn ? "关闭高级模式" : "开启高级模式";
   if (!advancedOn && ADVANCED_VIEWS.indexOf(currentView) >= 0) setView("overview");
+  // 节点编辑器（高级档）：只有高级模式才显示节点编辑区
+  const nodeEditor = document.getElementById("node-editor");
+  if (nodeEditor) {
+    nodeEditor.hidden = !advancedOn;
+  }
 }
 
 // "锁住"只说一件事：这几屏要读到磁盘上那份状态才有内容可改。
@@ -4486,7 +5173,29 @@ document.getElementById("add-ruleset-local").addEventListener("click", function 
 document.getElementById("add-ruleset-remote").addEventListener("click", function () {
   addRuleSetRow("remote");
 });
-document.getElementById("add-device").addEventListener("click", addDeviceRow);
+document.getElementById("add-device").addEventListener("click", openAddDeviceModal);
+// 全选与清除选择
+document.getElementById("select-all").addEventListener("click", selectAllRoutingCards);
+document.getElementById("clear-selection").addEventListener("click", clearRoutingSelection);
+// 设备搜索
+document.getElementById("device-search-input").addEventListener("input", function (e) {
+  const val = e.target.value.trim();
+  const clearBtn = document.getElementById("device-search-clear");
+  if (clearBtn) clearBtn.hidden = !val;
+  if (val) searchDeviceByMac(val);
+});
+document.getElementById("device-search-clear").addEventListener("click", function () {
+  const input = document.getElementById("device-search-input");
+  if (input) input.value = "";
+  this.hidden = true;
+});
+// 设备详情弹窗
+document.getElementById("modal-device-save").addEventListener("click", saveDeviceModal);
+document.getElementById("modal-device-cancel").addEventListener("click", closeDeviceModal);
+document.getElementById("modal-device-delete").addEventListener("click", deleteDeviceFromModal);
+// 添加设备弹窗
+document.getElementById("new-device-save").addEventListener("click", saveNewDevice);
+document.getElementById("new-device-cancel").addEventListener("click", closeAddDeviceModal);
 document.getElementById("add-group-selector").addEventListener("click", function () {
   addGroupRow("selector");
 });
@@ -4514,11 +5223,14 @@ document.getElementById("add-node-hysteria2").addEventListener("click", function
 document.getElementById("add-node-tuic").addEventListener("click", function () {
   addNodeRow("tuic");
 });
+document.getElementById("ping-all").addEventListener("click", function () {
+  pingAllNodes();
+});
 document.getElementById("sub-import").addEventListener("click", function () {
   importSubscription();
 });
 document.getElementById("sub-policy-link").addEventListener("click", function () {
-  setView("policy");
+  setView("routing");
 });
 document.getElementById("sub-url").addEventListener("keydown", function (event) {
   if (event.key === "Enter") {

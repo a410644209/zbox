@@ -25,7 +25,10 @@ use std::path::Path;
 ///
 /// v2 = 三档域名名单（`direct_domains` / `proxy_domains` / `blocked_domains`）合成一条
 /// 有序 `domain_rules`，顺序即优先级。
-pub const STATE_SCHEMA: u32 = 2;
+///
+/// v3 = 加 `subscription_meta`（订阅到期时间、流量配额）。这一格是 `Option<_>` + `#[serde(default)]`，
+/// v2 文件里没它时读成 `None`，所以 v2→v3 的迁移只补版本键、不碰内容。
+pub const STATE_SCHEMA: u32 = 3;
 
 /// 没有 `schema` 键的文件是哪个版本：版本门是后加的，加之前只有 v1 一种磁盘形状，
 /// 所以"缺键"读成 v1 不是让步，而是唯一正确的读法。
@@ -99,62 +102,70 @@ fn read_schema(value: &Value) -> Result<u32, String> {
     }
 }
 
-/// 把老版本的磁盘形状就地迁到当前版本。只认识 v1 -> v2；更老的版本在这里明说没有迁移，
-/// 比让反序列化去猜"少了哪个键"有用。
+/// 把老版本的磁盘形状就地迁到当前版本。
+///
+/// - v1 → v3：先做 v1→v2（三档名单合成有序 `domain_rules`），再补 v3 的版本键。
+/// - v2 → v3：只补版本键。v3 加的 `subscription_meta` 是 `Option<_>` + `#[serde(default)]`，
+///   v2 文件里没它时读成 `None`，不需要数据转换。
 fn migrate(value: &mut Value, from: u32) -> Result<(), String> {
-    if from != 1 {
+    if from == 0 || from > STATE_SCHEMA {
         return Err(format!(
-            "状态文件的 schema 是 v{from}：ZBox 写过 v1 和 v{STATE_SCHEMA}，\
+            "状态文件的 schema 是 v{from}：ZBox 写过 v1 到 v{STATE_SCHEMA}，\
             v{from} -> v{STATE_SCHEMA} 没有对应的迁移。"
         ));
     }
     let Value::Object(root) = value else {
         return Err("状态文件顶层不是一个对象，没法迁移".into());
     };
-    let Some(Value::Object(policy)) = root.get_mut("policy") else {
-        // 没有 policy 就没什么可迁的，缺字段由后面的反序列化报出来
-        root.insert("schema".into(), json!(STATE_SCHEMA));
-        return Ok(());
-    };
-    let mut merged: Vec<Value> = Vec::new();
-    const LEGACY: [(&str, DomainAction); 3] = [
-        ("blocked_domains", DomainAction::Block),
-        ("direct_domains", DomainAction::Direct),
-        ("proxy_domains", DomainAction::Proxy),
-    ];
-    let present: Vec<&str> = LEGACY
-        .iter()
-        .map(|(key, _)| *key)
-        .filter(|key| policy.contains_key(*key))
-        .collect();
-    if present.is_empty() {
-        // 一档老名单都没有，说明这份已经是 v2 的形状（多半是手写的、忘了写 schema 键），
-        // 只补版本键，不碰内容
-        root.insert("schema".into(), json!(STATE_SCHEMA));
-        return Ok(());
-    }
-    if policy.contains_key("domain_rules") {
-        return Err(format!(
-            "v1 的分档名单（{}）和 v2 的 domain_rules 同时存在：两套格式混在一份文件里，\
-             不敢猜该丢哪一档",
-            present.join("、")
-        ));
-    }
-    // 展开顺序 = v1 阶梯里的实际生效顺序（#18 定案"拦截优先"），所以迁上来的老配置行为不变
-    for (key, action) in LEGACY {
-        let Some(found) = policy.remove(key) else {
-            continue;
+    // v1 → v2：三档名单合成有序 domain_rules
+    if from == 1 {
+        let Some(Value::Object(policy)) = root.get_mut("policy") else {
+            // 没有 policy 就没什么可迁的，缺字段由后面的反序列化报出来
+            root.insert("schema".into(), json!(STATE_SCHEMA));
+            return Ok(());
         };
-        let Value::Array(items) = found else {
-            return Err(format!("v1 的 {key} 不是一个数组: {found}"));
-        };
-        for item in items {
-            let pattern: DomainPattern = serde_json::from_value(item)
-                .map_err(|e| format!("v1 的 {key} 里有一条认不出来的域名规则: {e}"))?;
-            merged.push(rule_value(pattern, action)?);
+        let mut merged: Vec<Value> = Vec::new();
+        const LEGACY: [(&str, DomainAction); 3] = [
+            ("blocked_domains", DomainAction::Block),
+            ("direct_domains", DomainAction::Direct),
+            ("proxy_domains", DomainAction::Proxy),
+        ];
+        let present: Vec<&str> = LEGACY
+            .iter()
+            .map(|(key, _)| *key)
+            .filter(|key| policy.contains_key(*key))
+            .collect();
+        if present.is_empty() {
+            // 一档老名单都没有，说明这份已经是 v2 的形状（多半是手写的、忘了写 schema 键），
+            // 只补版本键，不碰内容
+            root.insert("schema".into(), json!(STATE_SCHEMA));
+            return Ok(());
         }
+        if policy.contains_key("domain_rules") {
+            return Err(format!(
+                "v1 的分档名单（{}）和 v2 的 domain_rules 同时存在：两套格式混在一份文件里，\
+                 不敢猜该丢哪一档",
+                present.join("、")
+            ));
+        }
+        // 展开顺序 = v1 阶梯里的实际生效顺序（#18 定案"拦截优先"），所以迁上来的老配置行为不变
+        for (key, action) in LEGACY {
+            let Some(found) = policy.remove(key) else {
+                continue;
+            };
+            let Value::Array(items) = found else {
+                return Err(format!("v1 的 {key} 不是一个数组: {found}"));
+            };
+            for item in items {
+                let pattern: DomainPattern = serde_json::from_value(item)
+                    .map_err(|e| format!("v1 的 {key} 里有一条认不出来的域名规则: {e}"))?;
+                merged.push(rule_value(pattern, action)?);
+            }
+        }
+        policy.insert("domain_rules".into(), Value::Array(merged));
     }
-    policy.insert("domain_rules".into(), Value::Array(merged));
+    // v2 → v3 与 v1 → v2 的末尾：只补版本键。v3 加的 subscription_meta 是 Option<_>，
+    // 缺省时 serde 读成 None，不需要在迁移里写一个显式的 null。
     root.insert("schema".into(), json!(STATE_SCHEMA));
     Ok(())
 }
@@ -489,6 +500,8 @@ mod tests {
             mac: None,
             hostname: None,
             mode: DeviceMode::Global,
+            ip_type: crate::model::device::IpType::Dhcp,
+            display_name: None,
         }];
         let err = parse(&to_text(&state)).unwrap_err();
         assert!(err.starts_with("这 3 处不成立，要改："), "{err}");
@@ -628,4 +641,65 @@ mod tests {
         let mode = fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "订阅令牌不该落进组或其他人可读的文件");
     }
+
+    /// v2 → v3 迁移：v2 文件里没有 `subscription_meta`，读上来是 `None`。
+    /// v3 只加了一个 `Option<_>` 字段，不需要数据转换，只补版本键。
+    #[test]
+    fn a_v2_file_migrates_to_v3_with_subscription_meta_absent() {
+        let state = sample();
+        // 写一份 v2 形状的文件：手动把 schema 设成 2
+        let mut value: serde_json::Value = serde_json::to_value(&state).unwrap();
+        value.as_object_mut().unwrap().insert("schema".into(), json!(2));
+        // v2 文件里 subscription_meta 是 null（None 序列化后的形状）
+        let text = serde_json::to_string(&value).unwrap();
+
+        // 读回来应该成功迁移到 v3，subscription_meta 是 None
+        let parsed = parse(&text).unwrap();
+        assert_eq!(parsed.subscription_meta, None);
+
+        // 写回去应该是 v3 形状
+        let written = to_text(&parsed);
+        let written_value: serde_json::Value = serde_json::from_str(&written).unwrap();
+        assert_eq!(written_value["schema"], STATE_SCHEMA);
+        assert_eq!(written_value["schema"], 3);
+    }
+
+    /// subscription_meta 在磁盘上的形状：三个可选字段，None 时不出现在 JSON 里。
+    #[test]
+    fn subscription_meta_round_trips_through_disk() {
+        use crate::model::config::SubscriptionMeta;
+
+        let mut state = sample();
+        state.subscription_meta = Some(SubscriptionMeta {
+            expire: Some(1799971200), // 2027-01-14 00:00:00 UTC
+            total: Some(107374182400_i64), // 100 GB
+            used: Some(1073741824_i64),    // 1 GB
+        });
+        let text = to_text(&state);
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["schema"], STATE_SCHEMA);
+        assert_eq!(value["subscription_meta"]["expire"], json!(1799971200));
+        assert_eq!(value["subscription_meta"]["total"], json!(107374182400_i64));
+        assert_eq!(value["subscription_meta"]["used"], json!(1073741824_i64));
+
+        // 读回来
+        let back = parse(&text).unwrap();
+        assert_eq!(back.subscription_meta, state.subscription_meta);
+
+        // 部分字段缺失时：只有 expire
+        let mut partial = sample();
+        partial.subscription_meta = Some(SubscriptionMeta {
+            expire: Some(1799971200),
+            total: None,
+            used: None,
+        });
+        let partial_text = to_text(&partial);
+        let partial_value: serde_json::Value = serde_json::from_str(&partial_text).unwrap();
+        assert_eq!(partial_value["subscription_meta"]["expire"], json!(1799971200));
+        // None 的字段不出现在 JSON 里（serde 的 skip_serializing_if 没加，所以会是 null）
+        // 但读回来时 null 会被反序列化成 None
+        let partial_back = parse(&partial_text).unwrap();
+        assert_eq!(partial_back.subscription_meta, partial.subscription_meta);
+    }
 }
+

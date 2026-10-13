@@ -28,6 +28,15 @@ pub fn snapshot_files(state: &DesiredState) -> Result<BTreeMap<String, String>, 
         netstate::TEARDOWN_PATH.to_string(),
         netstate::render_teardown(),
     );
+    // dae/oxidns 也存进快照：逐行对照"已生效"要从 last_good 修订里读这两份文本。
+    // 渲染失败时不阻塞整份快照（sing-box 退役中，dae/oxidns 可能还不可用），
+    // 缺的那一份在 ladder 侧按"无从判断"处理。
+    if let Ok(text) = dae::render(state) {
+        files.insert(dae::DAE_PATH.to_string(), text);
+    }
+    if let Ok(text) = oxidns::render(state) {
+        files.insert(oxidns::OXIDNS_PATH.to_string(), text);
+    }
     Ok(files)
 }
 
@@ -81,7 +90,13 @@ mod tests {
         let keys: Vec<&str> = files.keys().map(String::as_str).collect();
         assert_eq!(
             keys,
-            vec!["config.json", "netstate-down.sh", "netstate.sh", "zbox.nft"],
+            vec![
+                "config.json",
+                "dae.conf",
+                "netstate-down.sh",
+                "netstate.sh",
+                "zbox.nft"
+            ],
             "快照内容变了就要同步改 apply/svc 层的假设"
         );
         for (path, body) in &files {
@@ -100,6 +115,21 @@ mod tests {
         let mut state = DesiredState::baseline();
         state.network.lan_interface = String::new();
         assert!(snapshot_files(&state).is_err());
+    }
+
+    /// 基线状态缺 `lan_address`，oxidns 渲染不出来，快照里就没有 `oxidns.yaml`；
+    /// 补上之后两份都在。dae/oxidns 渲染失败不阻塞整份快照（`snapshot_files` 用 `if let Ok`），
+    /// 但逐行对照那一侧会因为缺文本而报"无从判断"。
+    #[test]
+    fn a_fully_renderable_state_carries_both_dae_and_oxidns_in_the_snapshot() {
+        let state = a_renderable_baseline();
+        let files = snapshot_files(&state).unwrap();
+        let keys: Vec<&str> = files.keys().map(String::as_str).collect();
+        assert!(keys.contains(&"dae.conf"), "dae.conf 不在快照里: {keys:?}");
+        assert!(
+            keys.contains(&"oxidns.yaml"),
+            "oxidns.yaml 不在快照里: {keys:?}"
+        );
     }
 
     /// 这一条钉的是 CLI 那一步的名字表：`render --target` 拼错时给的是**能粘回去的名单**，
